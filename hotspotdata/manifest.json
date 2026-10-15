@@ -1,7 +1,7 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "1.2",
+	"version": "1.3",
 	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
 	"description": { "zh": "关热点时关闭蜂窝或断开数据，开热点时恢复", "en": "Cellular follows the hotspot" },
 	"entry": "index.html",
@@ -19,6 +19,11 @@
 				{ "value": "radio", "label": { "zh": "关闭蜂窝（最省电，收不到短信电话）", "en": "Cellular off (least power, no SMS or calls)" } },
 				{ "value": "data", "label": { "zh": "只断数据（短信电话正常）", "en": "Data off only (SMS and calls work)" } }
 			]
+		},
+		{
+			"id": "pause_sim_status", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.pause_sim_status", "default": "1",
+			"label": { "zh": "射频关闭时暂停 SIM 状态轮询", "en": "Pause SIM polling while radio is off" },
+			"note": { "zh": "更省电；期间状态栏不显示运营商", "en": "Saves power; no operator in the status bar meanwhile" }
 		},
 		{
 			"id": "off_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.off_delay", "default": "0",

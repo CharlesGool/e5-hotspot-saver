@@ -53,7 +53,8 @@ function draw() {
 	const r = st.radio ?? {}, m = st.modem;
 	const sim = r.card == null ? '' : ` · SIM ${r.card + 1}`;
 	const cell = r.known
-		? (r.off ? [e5.t({ zh: '射频已关闭', en: 'Radio off' }) + sim, 'off']
+		? (r.off ? [e5.t({ zh: '射频已关闭', en: 'Radio off' }) + sim +
+				(r.paused ? e5.t({ zh: ' · 轮询暂停', en: ' · polling paused' }) : ''), 'off']
 			: [[r.operator, r.label].filter(Boolean).map(esc).join(' ') || e5.t({ zh: '射频开启', en: 'Radio on' }), 'good'])
 		: m == null ? [e5.t({ zh: '无基带', en: 'No modem' }), 'poor']
 		: [e5.t({ zh: '读取中', en: 'Reading' }) + ` (MM ${esc(m)})`, 'fair'];

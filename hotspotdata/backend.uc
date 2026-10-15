@@ -81,6 +81,9 @@ return function(ctx) {
 	// truth where ModemManager's "disabled" is not: no AT in a request here.
 	function radio() {
 		let card = trim(readfile('/sys/module/sipc_wwan/parameters/card') ?? '0') == '1' ? 1 : 0;
+		// the service paused the poller only once it read CFUN 4 itself
+		if (stat('/var/run/hotspotdata.simstatus-paused'))
+			return { card, known: true, off: true, paused: true };
 		let d = null;
 		try { d = json(readfile('/run/t551m-sims.json') ?? 'null'); } catch (e) {}
 		let now = +(split(readfile('/proc/uptime') ?? '0', ' ')[0]);
