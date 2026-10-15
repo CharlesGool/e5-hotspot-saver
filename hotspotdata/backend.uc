@@ -1,11 +1,13 @@
 // 热点省电 (Hotspot Power Saver, id hotspotdata): the app's backend.  The linking itself runs in the background
-// (service.sh under /etc/init.d/hotspot-data); this installs that service and
+// (service.sh under /etc/init.d/hotspot-data, and the deep sleep sleep.sh as its
+// instance "sleep"); this installs that service and
 // keeps it installed -- an image update brings no /etc/init.d/hotspot-data, so
 // the notification poll (manifest "notifications") puts it back -- and serves
 // the app's page.
 //
 //   GET  /status          the hotspot, mobile data, the radio, the service, the settings
 //   POST /enabled         {"on": true|false}
+//   POST /sleep           {"on": true|false}: the deep sleep
 //   GET  /blank-poll      {ms}: the dark screen's poll, for the patched app.js
 //   POST /unpatch         app.js without poll-patch.js, the screen restarted
 //   GET  /notifications   (none: only the service and patch checks, once a minute)
@@ -29,6 +31,18 @@ const FN_ANCHOR = 'async function poll() {';
 const POLL_OLD = 'pollTimer = setTimeout(poll, blank ? POLL_BLANK : POLL_AWAKE);';
 const POLL_NEW = 'pollTimer = setTimeout(poll, blank ? hotspotdataBlankPoll() : POLL_AWAKE);';
 const BEGIN = '/* BEGIN e5-hotspotdata';
+// t551m-sim-status stamps its readings with time.monotonic(), which stops in
+// deep sleep, while the screen and this app compare them with /proc/uptime
+// (boottime): after the first suspend each reading looked older than 15 s and
+// the status bar said "unknown".  Both it and t551m-registration (which
+// compares with time.monotonic()) go to CLOCK_BOOTTIME.  (Patterns for sed's
+// basic regular expressions: no brackets; the parentheses are literal.)
+const BOOTTIME = [
+	{ file: '/usr/libexec/t551m-sim-status', service: 't551m-sim-status',
+	  from: "'updated': time.monotonic()", to: "'updated': time.clock_gettime(time.CLOCK_BOOTTIME)" },
+	{ file: '/usr/libexec/unisoc-modem/t551m-registration',
+	  from: "time.monotonic()-row", to: "time.clock_gettime(time.CLOCK_BOOTTIME)-row" }
+];
 const END = '/* END e5-hotspotdata */\n';
 
 return function(ctx) {
@@ -77,6 +91,28 @@ return function(ctx) {
 		return { patched: true, restarting: true };
 	}
 
+	// the SIM status stamped and read in boottime (BOOTTIME); a changed daemon
+	// restarted, unless it is paused by us
+	function ensure_simstat() {
+		let out = { patched: true };
+		for (let b in BOOTTIME) {
+			let src = readfile(b.file);
+			if (src == null || index(src, b.from) < 0)
+				continue;
+			// (cat into the file: its mode and owner stay)
+			ctx.run(`sed "s/${b.from}/${b.to}/g" '${b.file}' > '${b.file}.hotspotdata-new' && ` +
+				`cat '${b.file}.hotspotdata-new' > '${b.file}'; rm -f '${b.file}.hotspotdata-new'`);
+			if (index(readfile(b.file) ?? '', b.from) >= 0) {
+				out = { patched: false, error: `cannot patch ${b.file}` };
+				continue;
+			}
+			ctx.log(`${b.file}: SIM status in boottime (deep sleep)`);
+			if (b.service && !stat('/var/run/hotspotdata.simstatus-paused'))
+				ctx.run(`/etc/init.d/${b.service} restart >/dev/null 2>&1`);
+		}
+		return out;
+	}
+
 	function running() {
 		let s = ctx.ubus('service', 'list', { name: 'hotspot-data' })?.['hotspot-data'];
 		for (let name, inst in (s?.instances ?? {}))
@@ -97,7 +133,9 @@ return function(ctx) {
 		else if (!running())
 			ctx.run(`'${INIT}' enable; '${INIT}' start >/dev/null 2>&1`);
 		// (a reinstalled app: service.sh changed under the running one)
-		else if (readfile(`${DIR}/service.sh`) != readfile('/var/run/hotspotdata.running')) {
+		else if (readfile(`${DIR}/service.sh`) != readfile('/var/run/hotspotdata.running') ||
+				(readfile(`${DIR}/sleep.sh`) != null &&
+				 readfile(`${DIR}/sleep.sh`) != readfile('/var/run/hotspotdata.sleep/running'))) {
 			ctx.run(`'${INIT}' restart >/dev/null 2>&1`);
 			ctx.log('service restarted for the new version');
 		}
@@ -165,6 +203,33 @@ return function(ctx) {
 		return { ms: off && s > 5 ? s * 1000 : null };
 	}
 
+	// the deep sleep (sleep.sh): why it is awake, and its statistics since it started
+	function sleep_status() {
+		let RUN = '/var/run/hotspotdata.sleep', st = split(trim(readfile(`${RUN}/state`) ?? ''), ' ');
+		let s = {};
+		for (let l in split(readfile(`${RUN}/stats`) ?? '', '
+')) {
+			let m = match(l, /^([a-z_]+)=(.*)$/);
+			if (m) s[m[1]] = match(m[2], /^[0-9]+$/) ? +m[2] : m[2];
+		}
+		return {
+			on: setting('sleep', '1') != '0',
+			deep: index(readfile('/sys/power/mem_sleep') ?? '', 'deep') >= 0,
+			delay: +setting('sleep_delay', '30'),
+			radio_on: setting('sleep_radio_on', '0') == '1',
+			// "asleep", or "awake" and why: screen delay power hotspot radio audio wakelock backoff grace kernel disabled
+			state: st[0] || null,
+			why: st[1] || null,
+			sleeps: s.sleeps ?? 0,
+			fails: s.fails ?? 0,
+			slept: s.slept ?? 0,
+			wall: s.since ? time() - s.since : 0,
+			last_slept: s.last_slept ?? 0,
+			last_by: s.last_by || null,
+			last_at: s.last_at || null
+		};
+	}
+
 	// a value that may fail (a command, a file) without failing the status
 	function guarded(fn) {
 		try { return fn(); } catch (e) { ctx.log(`status: ${e}`); return null; }
@@ -190,6 +255,7 @@ return function(ctx) {
 			bt_off: stat('/var/run/hotspotdata.bt-off') != null,
 			idle_off: +setting('idle_off', '30'),
 			blank_poll: guarded(() => blank_poll().ms),
+			sleep: guarded(sleep_status),
 			service
 		};
 	}
@@ -197,6 +263,11 @@ return function(ctx) {
 	return {
 		'GET /status': function(req) {
 			let st = status(ensure_service());
+			st.simstat = ctx.state_get('simstat', 60);
+			if (st.simstat == null) {
+				st.simstat = ensure_simstat();
+				ctx.state_put('simstat', st.simstat);
+			}
 			// (the page asks every 3 s: app.js is read at most once a minute)
 			st.patch = ctx.state_get('patch', 60);
 			if (st.patch == null) {
@@ -232,11 +303,25 @@ return function(ctx) {
 			c.commit(CFG);
 			return status(ensure_service());
 		},
+		'POST /sleep': function(req) {
+			let on = req.body?.on;
+			if (type(on) != 'bool')
+				return { status: 400, type: 'application/json', body: '{"error":"on: true or false"}' };
+			if (!stat(`/etc/config/${CFG}`))
+				writefile(`/etc/config/${CFG}`, '');
+			let c = ctx.uci();
+			if (c.get(CFG, 'settings') == null)
+				c.set(CFG, 'settings', 'settings');
+			c.set(CFG, 'settings', 'sleep', on ? '1' : '0');
+			c.commit(CFG);
+			return status(ensure_service());
+		},
 		'GET /notifications': function(req) {
 			if (!ctx.state_get('checked', 60)) {
 				ctx.state_put('checked', { at: time() });
 				ensure_service();
 				ensure_patch();
+				ensure_simstat();
 			}
 			return { notifications: [] };
 		}

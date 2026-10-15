@@ -1,10 +1,10 @@
 # 热点省电 · Hotspot Power Saver
 
-关热点时关射频、降频、关核心、关蓝牙，开热点恢复
+关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复
 
-*Radio, CPU and Bluetooth off while the hotspot is off*
+*Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.3**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.4**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -18,7 +18,7 @@
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v2.3.tar.gz`](releases/hotspotdata-v2.3.tar.gz)。
+1. 下载 [`releases/hotspotdata-v2.4.tar.gz`](releases/hotspotdata-v2.4.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -42,8 +42,44 @@
   <sub>0 为不自动关；USB 连着电脑时不关</sub>
 - 关热点时关闭蓝牙（Bluetooth off with the hotspot）：默认开  
   <sub>有蓝牙设备连着时不关；开热点时恢复</sub>
+- 关热点后深度休眠（Deep sleep with the hotspot off）：默认开  
+  <sub>熄屏后系统真正休眠，按键、充电器、基带唤醒；插着 USB 或充电时不休眠</sub>
+- 熄屏后多久开始休眠（秒）：5–600，默认 30
+- 蜂窝射频开着时也休眠：默认关  
+  <sub>默认只在射频关闭后休眠；射频开着时基带每隔几秒唤醒一次，反复醒睡可能比不睡更费电</sub>
+- 唤醒后保持清醒（秒）：2–60，默认 5  
+  <sub>基带唤醒（短信、来电）时至少 15 秒</sub>
+- 休眠时定时唤醒（分钟）：0–240，默认 0
 - 射频关闭时熄屏刷新间隔（Dark-screen refresh with the radio off）：5 秒（原样）；30 秒；**1 分钟**；5 分钟
 - 关热点后延迟断开（分钟）（Delay after hotspot off (min)）：0–30 min，默认 0
+
+## 深度休眠
+
+OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内核和固件其实支持
+（`/sys/power/mem_sleep` 有 `deep`），`sleep.sh`（同一服务的 `sleep` 实例）在下面几条
+都满足时让系统挂起到内存，被无关事件唤醒后很快再睡回去：
+
+- 熄屏达到设定时间；
+- 热点关闭：Wi-Fi 驱动休眠时会停掉 AP，hostapd 不知道，热点会坏；
+- 没插 USB、没充电：USB 驱动有 VBUS 时拒绝休眠；
+- 蜂窝射频已关闭（或打开了“射频开着时也休眠”）；
+- 没有声音在播放或录音，没有 `/sys/power/wake_lock` 唤醒锁。
+
+连续 3 次睡不到 10 秒会暂缓休眠（60 秒起，加倍，最多 10 分钟）。
+
+实测（关热点、射频关、熄屏、拔线）：152.9 秒里睡了 148.6 秒（97%）；电源键唤醒并点亮屏幕。
+射频和数据开着时只睡 17.6%，平均 147 mA，比不睡（74 mA）更费电，所以默认只在射频关闭后休眠。
+
+主线内核的 PMIC 看门狗驱动（`ump9620-pmic-wdt`）没有挂起处理，休眠时照样计时，procd 被冻结
+无法喂狗，睡满 30 秒就会复位并回退进 Android。所以每次休眠前让 procd 用 magic close 关闭看门狗，
+醒来立刻重新打开。
+
+休眠会让 CLOCK_MONOTONIC 停走、/proc/uptime 照走：系统的 t551m-sim-status 用前者给 SIM 状态
+打时间戳，状态栏和本应用用后者判断新旧，休眠过一次后信号就一直显示“状态未知”、蜂窝“读取中”。
+本应用会把 t551m-sim-status 和 t551m-registration 改成 CLOCK_BOOTTIME（镜像更新后自动重做）。
+
+已知限制：侧键长按（sidekey）在休眠中可能被识别成单击（唤醒约需 1 秒）；每次唤醒内核会把
+显示面板重新上电一次。日志：`logread -e hotspotdata | grep sleep:`。
 
 ## 源码
 
@@ -55,10 +91,12 @@
 - [`manifest.json`](hotspotdata/manifest.json)
 - [`poll-patch.js`](hotspotdata/poll-patch.js)
 - [`service.sh`](hotspotdata/service.sh)
+- [`sleep.sh`](hotspotdata/sleep.sh)
 
 ## 版本
 
-- [v2.3](releases/hotspotdata-v2.3.tar.gz)（当前）
+- [v2.4](releases/hotspotdata-v2.4.tar.gz)（当前）：深度休眠
+- [v2.3](releases/hotspotdata-v2.3.tar.gz)
 - [v2.2](releases/hotspotdata-v2.2.tar.gz)
 - [v2.1](releases/hotspotdata-v2.1.tar.gz)
 - [v2.0](releases/hotspotdata-v2.0.tar.gz)

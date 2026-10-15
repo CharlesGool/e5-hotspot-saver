@@ -21,6 +21,7 @@
 <body>
 <div class="card" id="state"></div>
 <button id="toggle"></button>
+<button id="sleep" style="margin-top:7px"></button>
 <div class="sub" id="note" style="margin-top:7px"></div>
 <script src="/sdk/e5.js"></script>
 <script>
@@ -29,6 +30,35 @@
 // this page shows it and turns it on and off.  Settings: 高级 -> 热点省电.
 const $ = (id) => document.getElementById(id);
 let st = null, busy = false, loadError = null;
+
+// deep sleep: why the system stays awake, and what woke it last (sleep.sh)
+const WHY = {
+	screen: { zh: '屏幕亮着', en: 'screen lit' }, delay: { zh: '刚熄屏', en: 'just dark' },
+	power: { zh: '插着 USB / 充电', en: 'on USB / charging' }, hotspot: { zh: '热点开着', en: 'hotspot on' },
+	radio: { zh: '射频开着', en: 'radio on' }, audio: { zh: '声音播放中', en: 'audio in use' },
+	wakelock: { zh: '唤醒锁', en: 'wake lock' }, backoff: { zh: '频繁唤醒，暂缓', en: 'woken too often' },
+	grace: { zh: '刚被唤醒', en: 'just woken' }, kernel: { zh: '内核忙', en: 'kernel busy' },
+	disabled: { zh: '已关闭', en: 'off' }
+};
+const BY = {
+	key: { zh: '按键', en: 'key' }, rtc: { zh: '定时', en: 'timer' }, power: { zh: '充电器', en: 'charger' },
+	modem: { zh: '基带', en: 'modem' }, wcn: { zh: 'Wi-Fi/蓝牙', en: 'Wi-Fi/BT' }, other: { zh: '其他', en: 'other' },
+	unknown: { zh: '未知', en: 'unknown' }
+};
+
+function sleepRow(z) {
+	if (!z) return '';
+	const now = !z.on ? [e5.t({ zh: '关闭', en: 'Off' }), 'off']
+		: !z.deep ? [e5.t({ zh: '内核不支持', en: 'Not supported' }), 'poor']
+		: z.state == 'asleep' ? [e5.t({ zh: '休眠中', en: 'Asleep' }), 'good']
+		: [e5.t({ zh: '清醒 · ', en: 'Awake · ' }) + e5.t(WHY[z.why] ?? { zh: esc(z.why ?? '--'), en: esc(z.why ?? '--') }),
+			z.why == 'backoff' ? 'fair' : 'off'];
+	const pct = z.wall > 0 ? Math.round(100 * z.slept / z.wall) : 0;
+	const last = z.last_by ? e5.t({ zh: `上次睡 ${z.last_slept} 秒，${e5.t(BY[z.last_by] ?? BY.other)}唤醒`,
+		en: `last ${z.last_slept} s, woken by ${e5.t(BY[z.last_by] ?? BY.other)}` }) : '';
+	return row(e5.t({ zh: '深度休眠', en: 'Deep sleep' }), now[0], now[1]) +
+		(z.sleeps > 0 ? `<div class="sub" style="text-align:right">${e5.t({ zh: `已休眠 ${z.sleeps} 次，占 ${pct}%`, en: `${z.sleeps} sleeps, ${pct}% of the time` })}${last ? ' · ' + last : ''}</div>` : '');
+}
 
 function esc(s) {
 	return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -82,8 +112,11 @@ function draw() {
 		row(e5.t({ zh: 'CPU 核心', en: 'CPU cores' }),
 			(st.cores_off > 0 ? e5.t({ zh: `已关 ${st.cores_off} 个`, en: `${st.cores_off} off` }) + ' · ' : '') +
 			e5.t({ zh: '在线 ', en: 'online ' }) + esc(st.cores_online ?? '--'), st.cores_off > 0 ? 'off' : 'good') +
+		sleepRow(st.sleep) +
 		row(e5.t({ zh: '后台服务', en: 'Service' }),
 			st.service ? e5.t({ zh: '运行中', en: 'Running' }) : e5.t({ zh: '未运行', en: 'Stopped' }), st.service ? 'good' : 'poor');
+	$('sleep').textContent = st.sleep?.on ? e5.t({ zh: '关闭深度休眠', en: 'Turn deep sleep off' })
+		: e5.t({ zh: '开启深度休眠', en: 'Turn deep sleep on' });
 	$('toggle').textContent = st.enabled ? e5.t({ zh: '关闭省电', en: 'Turn saving off' })
 		: e5.t({ zh: '开启省电', en: 'Turn saving on' });
 	const what = st.mode == 'radio'
@@ -98,6 +131,8 @@ function draw() {
 		: '';
 	$('note').textContent = st.enabled
 		? when + what + e5.t({ zh: '；开热点时自动恢复。', en: '; turning it on brings it back. ' }) + idle +
+			(st.sleep?.on ? e5.t({ zh: `射频关闭后，熄屏 ${st.sleep.delay} 秒进入深度休眠（未插 USB 时），按任意键唤醒。`,
+				en: `With the radio off, it deep-sleeps ${st.sleep.delay} s after the screen goes dark (not on USB); any key wakes it. ` }) : '') +
 			e5.t({ zh: '各项设置在 高级 → 热点省电。', en: 'Settings: Advanced -> Hotspot Power Saver.' })
 		: e5.t({ zh: '省电已关闭，热点关闭后一切照常。', en: 'Saving is off: nothing changes with the hotspot.' });
 }
@@ -122,6 +157,14 @@ e5.onKey((k) => {
 	return false;
 });
 $('toggle').addEventListener('click', toggle);
+$('sleep').addEventListener('click', async () => {
+	if (busy || !st?.sleep) return;
+	busy = true;
+	try { st = await e5.api('/sleep', { body: { on: !st.sleep.on } }); }
+	catch (e) { e5.toast(e.message); }
+	busy = false;
+	draw();
+});
 draw();
 load();
 setInterval(load, 3000);

@@ -1,9 +1,9 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "2.3",
+	"version": "2.4",
 	"name": { "zh": "热点省电", "en": "Hotspot Power Saver" },
-	"description": { "zh": "关热点时关射频、降频、关核心、关蓝牙，开热点恢复", "en": "Radio, CPU and Bluetooth off while the hotspot is off" },
+	"description": { "zh": "关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复", "en": "Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark" },
 	"entry": "index.html",
 	"order": 40,
 	"notifications": true,
@@ -60,6 +60,33 @@
 			"id": "bt_off", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.bt_off", "default": "1",
 			"label": { "zh": "关热点时关闭蓝牙", "en": "Bluetooth off with the hotspot" },
 			"note": { "zh": "有蓝牙设备连着时不关；开热点时恢复", "en": "Not while a device is connected; back with the hotspot" }
+		},
+		{
+			"id": "sleep", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.sleep", "default": "1",
+			"label": { "zh": "关热点后深度休眠", "en": "Deep sleep with the hotspot off" },
+			"note": { "zh": "熄屏后系统真正休眠，按键、充电器、基带唤醒；插着 USB 或充电时不休眠", "en": "The system suspends with the screen dark; keys, the charger and the modem wake it. Never on USB or while charging" }
+		},
+		{
+			"id": "sleep_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.sleep_delay", "default": "30",
+			"min": 5, "max": 600, "step": 5, "unit": "s",
+			"label": { "zh": "熄屏后多久开始休眠（秒）", "en": "Sleep after the screen is dark for (s)" }
+		},
+		{
+			"id": "sleep_radio_on", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.sleep_radio_on", "default": "0",
+			"label": { "zh": "蜂窝射频开着时也休眠", "en": "Deep sleep with the cellular radio on too" },
+			"note": { "zh": "默认只在射频关闭后休眠（关热点时：关闭蜂窝）；射频开着时基带每隔几秒唤醒一次，反复醒睡可能比不睡更费电", "en": "By default only with the radio off (mode: cellular off): with it on, the modem wakes the system every few seconds" }
+		},
+		{
+			"id": "sleep_grace", "type": "number", "uci": "e5-plugin-hotspotdata.settings.sleep_grace", "default": "5",
+			"min": 2, "max": 60, "step": 1, "unit": "s",
+			"label": { "zh": "唤醒后保持清醒（秒）", "en": "Stay awake after a wake (s)" },
+			"note": { "zh": "基带唤醒（短信、来电）时至少 15 秒", "en": "At least 15 s after a modem wake (SMS, call)" }
+		},
+		{
+			"id": "sleep_wake_every", "type": "number", "uci": "e5-plugin-hotspotdata.settings.sleep_wake_every", "default": "0",
+			"min": 0, "max": 240, "step": 5, "unit": "min",
+			"label": { "zh": "休眠时定时唤醒（分钟）", "en": "Wake from deep sleep every (min)" },
+			"note": { "zh": "0 为不定时唤醒", "en": "0: never on a timer" }
 		},
 		{
 			"id": "blank_poll", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.blank_poll", "default": "60",
