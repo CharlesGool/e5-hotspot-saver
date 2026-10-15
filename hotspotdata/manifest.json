@@ -1,0 +1,80 @@
+{
+	"id": "hotspotdata",
+	"api_version": 2,
+	"version": "2.3",
+	"name": { "zh": "热点省电", "en": "Hotspot Power Saver" },
+	"description": { "zh": "关热点时关射频、降频、关核心、关蓝牙，开热点恢复", "en": "Radio, CPU and Bluetooth off while the hotspot is off" },
+	"entry": "index.html",
+	"order": 40,
+	"notifications": true,
+	"settings": [
+		{
+			"id": "enabled", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.enabled", "default": "1",
+			"label": { "zh": "启用热点省电", "en": "Hotspot power saving" }
+		},
+		{
+			"id": "mode", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.mode", "default": "radio",
+			"label": { "zh": "关热点时", "en": "With the hotspot off" },
+			"options": [
+				{ "value": "radio", "label": { "zh": "关闭蜂窝（最省电，收不到短信电话）", "en": "Cellular off (least power, no SMS or calls)" } },
+				{ "value": "data", "label": { "zh": "只断数据（短信电话正常）", "en": "Data off only (SMS and calls work)" } }
+			]
+		},
+		{
+			"id": "pause_sim_status", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.pause_sim_status", "default": "1",
+			"label": { "zh": "射频关闭时暂停 SIM 状态轮询", "en": "Pause SIM polling while radio is off" },
+			"note": { "zh": "更省电；期间状态栏不显示运营商", "en": "Saves power; no operator in the status bar meanwhile" }
+		},
+		{
+			"id": "perf_low", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.perf_low", "default": "1",
+			"label": { "zh": "关热点时 CPU / GPU 锁最低频率", "en": "Lowest CPU / GPU clocks with the hotspot off" },
+			"note": { "zh": "开热点时恢复；期间屏幕操作会变慢", "en": "Restored with the hotspot; the screen is slower meanwhile" }
+		},
+		{
+			"id": "cores", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.cores", "default": "little",
+			"label": { "zh": "关热点时关闭 CPU 核心", "en": "CPU cores with the hotspot off" },
+			"note": { "zh": "开热点时全部恢复；若关核心导致死机，下次开机自动改回全部保留", "en": "All back with the hotspot; a crash turns this off at the next boot" },
+			"options": [
+				{ "value": "little", "label": { "zh": "只留小核", "en": "Little cores only" } },
+				{ "value": "two", "label": { "zh": "只留 2 个小核", "en": "Two little cores" } },
+				{ "value": "all", "label": { "zh": "全部保留", "en": "Keep all" } }
+			]
+		},
+		{
+			"id": "boost_screen", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.boost_screen", "default": "1",
+			"label": { "zh": "屏幕亮着时临时恢复全速", "en": "Full speed while the screen is lit" },
+			"note": { "zh": "亮屏 1 秒内放开核心和频率，熄屏 5 秒后恢复限制", "en": "Cores and clocks back within 1 s; limits again 5 s after it goes dark" }
+		},
+		{
+			"id": "dark_watch", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.dark_watch", "default": "1",
+			"label": { "zh": "熄屏时暂停屏幕电源监视", "en": "Pause the screen power watcher while dark" },
+			"note": { "zh": "熄屏 5 秒后暂停每秒 10 次的背光检查，亮屏后恢复", "en": "Its 10 checks a second stop 5 s after the screen goes dark, and go on when it lights" }
+		},
+		{
+			"id": "idle_off", "type": "number", "uci": "e5-plugin-hotspotdata.settings.idle_off", "default": "30",
+			"min": 0, "max": 120, "step": 5, "unit": "min",
+			"label": { "zh": "无设备连接时自动关热点（分钟）", "en": "Hotspot off when unused (min)" },
+			"note": { "zh": "0 为不自动关；USB 连着电脑时不关", "en": "0: never; not while a computer is on USB" }
+		},
+		{
+			"id": "bt_off", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.bt_off", "default": "1",
+			"label": { "zh": "关热点时关闭蓝牙", "en": "Bluetooth off with the hotspot" },
+			"note": { "zh": "有蓝牙设备连着时不关；开热点时恢复", "en": "Not while a device is connected; back with the hotspot" }
+		},
+		{
+			"id": "blank_poll", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.blank_poll", "default": "60",
+			"label": { "zh": "射频关闭时熄屏刷新间隔", "en": "Dark-screen refresh with the radio off" },
+			"options": [
+				{ "value": "5", "label": { "zh": "5 秒（原样）", "en": "5 s (unchanged)" } },
+				{ "value": "30", "label": { "zh": "30 秒", "en": "30 s" } },
+				{ "value": "60", "label": { "zh": "1 分钟", "en": "1 min" } },
+				{ "value": "300", "label": { "zh": "5 分钟", "en": "5 min" } }
+			]
+		},
+		{
+			"id": "off_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.off_delay", "default": "0",
+			"min": 0, "max": 30, "step": 1, "unit": "min",
+			"label": { "zh": "关热点后延迟断开（分钟）", "en": "Delay after hotspot off (min)" }
+		}
+	]
+}
