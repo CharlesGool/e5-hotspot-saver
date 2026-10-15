@@ -66,6 +66,8 @@ function draw() {
 			h.on ? 'good' : 'off') +
 		row(e5.t({ zh: '移动数据', en: 'Mobile data' }), data[0], data[1]) +
 		row(e5.t({ zh: '蜂窝', en: 'Cellular' }), cell[0], cell[1]) +
+		row(e5.t({ zh: 'CPU / GPU', en: 'CPU / GPU' }),
+			st.perf_low ? e5.t({ zh: '锁最低频率', en: 'Lowest clocks' }) : e5.t({ zh: '正常', en: 'Normal' }), st.perf_low ? 'off' : 'good') +
 		row(e5.t({ zh: '后台服务', en: 'Service' }),
 			st.service ? e5.t({ zh: '运行中', en: 'Running' }) : e5.t({ zh: '未运行', en: 'Stopped' }), st.service ? 'good' : 'poor');
 	$('toggle').textContent = st.enabled ? e5.t({ zh: '关闭联动', en: 'Turn linking off' })

@@ -103,6 +103,8 @@ return function(ctx) {
 			data: data(),
 			modem: modem(),
 			radio: radio(),
+			// CPU/GPU held at their lowest clocks (the service's saved limits)
+			perf_low: stat('/var/run/hotspotdata.perf') != null,
 			service
 		};
 	}
