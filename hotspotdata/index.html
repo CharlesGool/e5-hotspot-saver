@@ -70,6 +70,12 @@ function draw() {
 			st.boosted ? e5.t({ zh: '屏幕亮着，临时全速', en: 'Full speed, screen lit' })
 				: st.perf_low ? e5.t({ zh: '锁最低频率', en: 'Lowest clocks' }) : e5.t({ zh: '正常', en: 'Normal' }),
 			st.perf_low ? 'off' : 'good') +
+		row(e5.t({ zh: '蓝牙', en: 'Bluetooth' }),
+			st.bt_off ? e5.t({ zh: '已随热点关闭', en: 'Off with the hotspot' }) : e5.t({ zh: '未改动', en: 'Untouched' }),
+			st.bt_off ? 'off' : 'good') +
+		row(e5.t({ zh: '熄屏刷新', en: 'Dark refresh' }),
+			st.blank_poll ? e5.t({ zh: `每 ${st.blank_poll / 1000} 秒`, en: `every ${st.blank_poll / 1000} s` })
+				: e5.t({ zh: '每 5 秒（原样）', en: 'every 5 s' }), st.blank_poll ? 'off' : 'good') +
 		row(e5.t({ zh: 'CPU 核心', en: 'CPU cores' }),
 			(st.cores_off > 0 ? e5.t({ zh: `已关 ${st.cores_off} 个`, en: `${st.cores_off} off` }) + ' · ' : '') +
 			e5.t({ zh: '在线 ', en: 'online ' }) + esc(st.cores_online ?? '--'), st.cores_off > 0 ? 'off' : 'good') +
@@ -83,9 +89,13 @@ function draw() {
 	const when = st.off_delay > 0
 		? e5.t({ zh: `关热点 ${st.off_delay} 分钟后`, en: `${st.off_delay} min after the hotspot goes off, ` })
 		: e5.t({ zh: '关热点后立即', en: 'When the hotspot goes off, ' });
+	const idle = st.idle_off > 0
+		? e5.t({ zh: `热点 ${st.idle_off} 分钟没有设备连接会自动关闭（USB 连着电脑时不关）。`,
+			en: `The hotspot turns itself off after ${st.idle_off} min without a device (not with a computer on USB). ` })
+		: '';
 	$('note').textContent = st.enabled
-		? when + what + e5.t({ zh: '；开热点时自动恢复。模式和延迟在 高级 → 热点联动数据 里设置。',
-			en: '; turning it on brings it back. Mode and delay: Advanced -> Hotspot data link.' })
+		? when + what + e5.t({ zh: '；开热点时自动恢复。', en: '; turning it on brings it back. ' }) + idle +
+			e5.t({ zh: '各项设置在 高级 → 热点联动数据。', en: 'Settings: Advanced -> Hotspot data link.' })
 		: e5.t({ zh: '联动已关闭，移动数据按正常方式工作。', en: 'Linking is off: mobile data works as usual.' });
 }
 

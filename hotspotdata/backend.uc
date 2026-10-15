@@ -6,17 +6,86 @@
 //
 //   GET  /status          the hotspot, mobile data, the radio, the service, the settings
 //   POST /enabled         {"on": true|false}
-//   GET  /notifications   (none: only the service check, once a minute)
+//   GET  /blank-poll      {ms}: the dark screen's poll, for the patched app.js
+//   POST /unpatch         app.js without poll-patch.js, the screen restarted
+//   GET  /notifications   (none: only the service and patch checks, once a minute)
+//
+// app.js is patched (poll-patch.js) so that the dark screen polls its status
+// every blank_poll seconds instead of every 5 while the hotspot and the radio
+// are off: the patch asks GET /blank-poll.  An image update brings an
+// unpatched app.js; the notification poll patches it again and the screen
+// restarts once.  The volkeys app patches the same file elsewhere, between
+// its own markers.
 
 'use strict';
 
-import { readfile, writefile, stat } from 'fs';
+import { readfile, writefile, rename, stat } from 'fs';
 
 const DIR = '/etc/e5-infoscreen/plugins/hotspotdata';
 const INIT = '/etc/init.d/hotspot-data';
 const CFG = 'e5-plugin-hotspotdata';
+const APP = '/usr/share/e5-infoscreen/www/app.js';
+const FN_ANCHOR = 'async function poll() {';
+const POLL_OLD = 'pollTimer = setTimeout(poll, blank ? POLL_BLANK : POLL_AWAKE);';
+const POLL_NEW = 'pollTimer = setTimeout(poll, blank ? hotspotdataBlankPoll() : POLL_AWAKE);';
+const BEGIN = '/* BEGIN e5-hotspotdata';
+const END = '/* END e5-hotspotdata */\n';
 
 return function(ctx) {
+	function count(s, part) { return length(split(s, part)) - 1; }
+
+	// app.js without our block and with the poll line as it came
+	function strip(src) {
+		let b = index(src, BEGIN), e = index(src, END);
+		if (b < 0 || e < b) return null;
+		src = substr(src, 0, b) + substr(src, e + length(END));
+		return join(POLL_OLD, split(src, POLL_NEW));
+	}
+
+	function restart_screen() {
+		// (detached: this request runs in the screen's own API server)
+		ctx.run("setsid sh -c 'sleep 2; /etc/init.d/e5-infoscreen restart' >/dev/null 2>&1 &");
+	}
+
+	function write_app(src) {
+		let tmp = APP + '.hotspotdata-new';
+		if (writefile(tmp, src) == null || !rename(tmp, APP)) {
+			ctx.run(`rm -f '${tmp}'`);
+			return false;
+		}
+		return true;
+	}
+
+	// app.js with this version of poll-patch.js; the screen restarted when it changed
+	function ensure_patch() {
+		let src = readfile(APP), want = readfile(`${DIR}/poll-patch.js`);
+		if (src == null || want == null) return { patched: false, error: 'missing app.js or poll-patch.js' };
+		if (index(src, want) >= 0 && index(src, POLL_NEW) >= 0) return { patched: true };
+		if (index(src, BEGIN) >= 0) {
+			src = strip(src);
+			if (src == null) return { patched: false, error: 'cannot remove the older patch' };
+		}
+		if (count(src, FN_ANCHOR) != 1 || count(src, POLL_OLD) != 1)
+			return { patched: false, error: 'this screen version has no single status poll: not patched' };
+		let parts = split(src, FN_ANCHOR);
+		src = parts[0] + want + FN_ANCHOR + parts[1];
+		src = join(POLL_NEW, split(src, POLL_OLD));
+		if (!write_app(src))
+			return { patched: false, error: 'cannot write app.js' };
+		ctx.log('app.js patched (dark-screen poll), the screen restarts');
+		restart_screen();
+		return { patched: true, restarting: true };
+	}
+
+	function blank_poll() {
+		let s = int(setting('blank_poll', '60'));
+		if (!(s >= 5 && s <= 600)) s = 60;
+		// only with the hotspot off and the radio off by us: no SMS can come
+		let off = !hotspot().on && setting('enabled', '1') != '0' &&
+			(stat('/var/run/hotspotdata.radio-off.0') || stat('/var/run/hotspotdata.radio-off.1'));
+		return { ms: off && s > 5 ? s * 1000 : null };
+	}
+
 	function running() {
 		let s = ctx.ubus('service', 'list', { name: 'hotspot-data' })?.['hotspot-data'];
 		for (let name, inst in (s?.instances ?? {}))
@@ -110,13 +179,38 @@ return function(ctx) {
 			cores_online: trim(readfile('/sys/devices/system/cpu/online') ?? '') || null,
 			// the limits let go while the screen is lit (boost_screen)
 			boosted: stat('/var/run/hotspotdata.boost') != null,
+			// Bluetooth powered off by the service, the idle auto-off, the dark-screen poll
+			bt_off: stat('/var/run/hotspotdata.bt-off') != null,
+			idle_off: +setting('idle_off', '30'),
+			blank_poll: blank_poll().ms,
 			service
 		};
 	}
 
 	return {
 		'GET /status': function(req) {
-			return status(ensure_service());
+			let st = status(ensure_service());
+			// (the page asks every 3 s: app.js is read at most once a minute)
+			st.patch = ctx.state_get('patch', 60);
+			if (st.patch == null) {
+				st.patch = ensure_patch();
+				ctx.state_put('patch', st.patch);
+			}
+			return st;
+		},
+		'GET /blank-poll': function(req) {
+			return blank_poll();
+		},
+		'POST /unpatch': function(req) {
+			let src = readfile(APP);
+			if (src == null || index(src, BEGIN) < 0)
+				return { patched: false };
+			src = strip(src);
+			if (src == null || !write_app(src))
+				return { status: 500, type: 'application/json', body: '{"error":"cannot restore app.js"}' };
+			ctx.log('app.js restored (dark-screen poll), the screen restarts');
+			restart_screen();
+			return { patched: false, restarting: true };
 		},
 		'POST /enabled': function(req) {
 			let on = req.body?.on;
@@ -133,8 +227,9 @@ return function(ctx) {
 		},
 		'GET /notifications': function(req) {
 			if (!ctx.state_get('checked', 60)) {
-				ensure_service();
 				ctx.state_put('checked', { at: time() });
+				ensure_service();
+				ensure_patch();
 			}
 			return { notifications: [] };
 		}

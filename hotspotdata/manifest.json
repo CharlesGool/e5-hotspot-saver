@@ -1,7 +1,7 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "1.9",
+	"version": "2.0",
 	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
 	"description": { "zh": "关热点时关闭蜂窝或断开数据，开热点时恢复", "en": "Cellular follows the hotspot" },
 	"entry": "index.html",
@@ -44,6 +44,27 @@
 			"id": "boost_screen", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.boost_screen", "default": "1",
 			"label": { "zh": "屏幕亮着时临时恢复全速", "en": "Full speed while the screen is lit" },
 			"note": { "zh": "亮屏 1 秒内放开核心和频率，熄屏 5 秒后恢复限制", "en": "Cores and clocks back within 1 s; limits again 5 s after it goes dark" }
+		},
+		{
+			"id": "idle_off", "type": "number", "uci": "e5-plugin-hotspotdata.settings.idle_off", "default": "30",
+			"min": 0, "max": 120, "step": 5, "unit": "min",
+			"label": { "zh": "无设备连接时自动关热点（分钟）", "en": "Hotspot off when unused (min)" },
+			"note": { "zh": "0 为不自动关；USB 连着电脑时不关", "en": "0: never; not while a computer is on USB" }
+		},
+		{
+			"id": "bt_off", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.bt_off", "default": "1",
+			"label": { "zh": "关热点时关闭蓝牙", "en": "Bluetooth off with the hotspot" },
+			"note": { "zh": "有蓝牙设备连着时不关；开热点时恢复", "en": "Not while a device is connected; back with the hotspot" }
+		},
+		{
+			"id": "blank_poll", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.blank_poll", "default": "60",
+			"label": { "zh": "射频关闭时熄屏刷新间隔", "en": "Dark-screen refresh with the radio off" },
+			"options": [
+				{ "value": "5", "label": { "zh": "5 秒（原样）", "en": "5 s (unchanged)" } },
+				{ "value": "30", "label": { "zh": "30 秒", "en": "30 s" } },
+				{ "value": "60", "label": { "zh": "1 分钟", "en": "1 min" } },
+				{ "value": "300", "label": { "zh": "5 分钟", "en": "5 min" } }
+			]
 		},
 		{
 			"id": "off_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.off_delay", "default": "0",
