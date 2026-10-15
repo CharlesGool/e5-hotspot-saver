@@ -25,8 +25,8 @@
 <script src="/sdk/e5.js"></script>
 <script>
 'use strict';
-// The linking runs in the background service; this page shows it and turns
-// it on and off.  The delay is under 高级 -> 热点联动数据.
+// 热点省电 (the hotspotdata app): the saving runs in the background service;
+// this page shows it and turns it on and off.  Settings: 高级 -> 热点省电.
 const $ = (id) => document.getElementById(id);
 let st = null, busy = false, loadError = null;
 
@@ -62,7 +62,7 @@ function draw() {
 		: m == null ? [e5.t({ zh: '无基带', en: 'No modem' }), 'poor']
 		: [e5.t({ zh: '读取中', en: 'Reading' }) + ` (MM ${esc(m)})`, 'fair'];
 	$('state').innerHTML =
-		row(e5.t({ zh: '联动', en: 'Linking' }),
+		row(e5.t({ zh: '省电', en: 'Saving' }),
 			st.enabled ? e5.t({ zh: '开启', en: 'On' }) : e5.t({ zh: '关闭', en: 'Off' }), st.enabled ? 'good' : 'off') +
 		row(e5.t({ zh: '热点', en: 'Hotspot' }),
 			!h.available ? e5.t({ zh: '未配置', en: 'None' }) : h.on ? e5.t({ zh: '开启', en: 'On' }) : e5.t({ zh: '关闭', en: 'Off' }),
@@ -84,8 +84,8 @@ function draw() {
 			e5.t({ zh: '在线 ', en: 'online ' }) + esc(st.cores_online ?? '--'), st.cores_off > 0 ? 'off' : 'good') +
 		row(e5.t({ zh: '后台服务', en: 'Service' }),
 			st.service ? e5.t({ zh: '运行中', en: 'Running' }) : e5.t({ zh: '未运行', en: 'Stopped' }), st.service ? 'good' : 'poor');
-	$('toggle').textContent = st.enabled ? e5.t({ zh: '关闭联动', en: 'Turn linking off' })
-		: e5.t({ zh: '开启联动', en: 'Turn linking on' });
+	$('toggle').textContent = st.enabled ? e5.t({ zh: '关闭省电', en: 'Turn saving off' })
+		: e5.t({ zh: '开启省电', en: 'Turn saving on' });
 	const what = st.mode == 'radio'
 		? e5.t({ zh: '关闭蜂窝（收不到短信电话）', en: 'cellular goes off (no SMS or calls)' })
 		: e5.t({ zh: '断开数据（短信电话正常）', en: 'data goes off (SMS and calls work)' });
@@ -98,8 +98,8 @@ function draw() {
 		: '';
 	$('note').textContent = st.enabled
 		? when + what + e5.t({ zh: '；开热点时自动恢复。', en: '; turning it on brings it back. ' }) + idle +
-			e5.t({ zh: '各项设置在 高级 → 热点联动数据。', en: 'Settings: Advanced -> Hotspot data link.' })
-		: e5.t({ zh: '联动已关闭，移动数据按正常方式工作。', en: 'Linking is off: mobile data works as usual.' });
+			e5.t({ zh: '各项设置在 高级 → 热点省电。', en: 'Settings: Advanced -> Hotspot Power Saver.' })
+		: e5.t({ zh: '省电已关闭，热点关闭后一切照常。', en: 'Saving is off: nothing changes with the hotspot.' });
 }
 
 async function load() {

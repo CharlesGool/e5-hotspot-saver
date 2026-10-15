@@ -1,16 +1,16 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "2.1",
-	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
-	"description": { "zh": "关热点时关闭蜂窝或断开数据，开热点时恢复", "en": "Cellular follows the hotspot" },
+	"version": "2.2",
+	"name": { "zh": "热点省电", "en": "Hotspot Power Saver" },
+	"description": { "zh": "关热点时关射频、降频、关核心、关蓝牙，开热点恢复", "en": "Radio, CPU and Bluetooth off while the hotspot is off" },
 	"entry": "index.html",
 	"order": 40,
 	"notifications": true,
 	"settings": [
 		{
 			"id": "enabled", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.enabled", "default": "1",
-			"label": { "zh": "数据跟随热点", "en": "Data follows hotspot" }
+			"label": { "zh": "启用热点省电", "en": "Hotspot power saving" }
 		},
 		{
 			"id": "mode", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.mode", "default": "radio",

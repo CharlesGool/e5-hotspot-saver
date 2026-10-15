@@ -1,4 +1,4 @@
-// 热点联动数据: the app's backend.  The linking itself runs in the background
+// 热点省电 (Hotspot Power Saver, id hotspotdata): the app's backend.  The linking itself runs in the background
 // (service.sh under /etc/init.d/hotspot-data); this installs that service and
 // keeps it installed -- an image update brings no /etc/init.d/hotspot-data, so
 // the notification poll (manifest "notifications") puts it back -- and serves
