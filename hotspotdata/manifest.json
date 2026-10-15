@@ -1,7 +1,7 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "1.4",
+	"version": "1.5",
 	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
 	"description": { "zh": "关热点时关闭蜂窝或断开数据，开热点时恢复", "en": "Cellular follows the hotspot" },
 	"entry": "index.html",
