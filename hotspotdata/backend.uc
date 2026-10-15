@@ -77,15 +77,6 @@ return function(ctx) {
 		return { patched: true, restarting: true };
 	}
 
-	function blank_poll() {
-		let s = int(setting('blank_poll', '60'));
-		if (!(s >= 5 && s <= 600)) s = 60;
-		// only with the hotspot off and the radio off by us: no SMS can come
-		let off = !hotspot().on && setting('enabled', '1') != '0' &&
-			(stat('/var/run/hotspotdata.radio-off.0') || stat('/var/run/hotspotdata.radio-off.1'));
-		return { ms: off && s > 5 ? s * 1000 : null };
-	}
-
 	function running() {
 		let s = ctx.ubus('service', 'list', { name: 'hotspot-data' })?.['hotspot-data'];
 		for (let name, inst in (s?.instances ?? {}))
@@ -163,6 +154,22 @@ return function(ctx) {
 			registration: s.registration, operator: s.operator, label: s.radio_label };
 	}
 
+	// (after setting() and hotspot(): ucode resolves names when it compiles,
+	// so a function defined further down is not seen from here)
+	function blank_poll() {
+		let s = int(setting('blank_poll', '60'));
+		if (!(s >= 5 && s <= 600)) s = 60;
+		// only with the hotspot off and the radio off by us: no SMS can come
+		let off = !hotspot().on && setting('enabled', '1') != '0' &&
+			(stat('/var/run/hotspotdata.radio-off.0') || stat('/var/run/hotspotdata.radio-off.1'));
+		return { ms: off && s > 5 ? s * 1000 : null };
+	}
+
+	// a value that may fail (a command, a file) without failing the status
+	function guarded(fn) {
+		try { return fn(); } catch (e) { ctx.log(`status: ${e}`); return null; }
+	}
+
 	function status(service) {
 		return {
 			enabled: setting('enabled', '1') != '0',
@@ -182,7 +189,7 @@ return function(ctx) {
 			// Bluetooth powered off by the service, the idle auto-off, the dark-screen poll
 			bt_off: stat('/var/run/hotspotdata.bt-off') != null,
 			idle_off: +setting('idle_off', '30'),
-			blank_poll: blank_poll().ms,
+			blank_poll: guarded(() => blank_poll().ms),
 			service
 		};
 	}

@@ -28,7 +28,7 @@
 // The linking runs in the background service; this page shows it and turns
 // it on and off.  The delay is under 高级 -> 热点联动数据.
 const $ = (id) => document.getElementById(id);
-let st = null, busy = false;
+let st = null, busy = false, loadError = null;
 
 function esc(s) {
 	return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,7 +40,10 @@ function row(label, text, cls) {
 
 function draw() {
 	if (!st) {
-		$('state').innerHTML = `<div class="sub">${e5.t({ zh: '读取中…', en: 'Loading…' })}</div>`;
+		// (a backend that fails says why, instead of loading for ever)
+		$('state').innerHTML = loadError
+			? `<div class="sub poor">${e5.t({ zh: '读取失败：', en: 'Cannot load: ' })}${esc(loadError)}</div>`
+			: `<div class="sub">${e5.t({ zh: '读取中…', en: 'Loading…' })}</div>`;
 		return;
 	}
 	const h = st.hotspot, d = st.data;
@@ -100,7 +103,8 @@ function draw() {
 }
 
 async function load() {
-	try { st = await e5.api('/status'); } catch (e) { e5.toast(e.message); }
+	try { st = await e5.api('/status'); loadError = null; }
+	catch (e) { loadError = e.message || String(e); if (st) e5.toast(loadError); }
 	draw();
 }
 
