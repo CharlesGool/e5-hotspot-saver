@@ -108,6 +108,8 @@ return function(ctx) {
 			// the cores the service took offline, and the kernel's online list ("0-5")
 			cores_off: length(filter(split(readfile('/var/run/hotspotdata.cores') ?? '', '\n'), l => l != '')),
 			cores_online: trim(readfile('/sys/devices/system/cpu/online') ?? '') || null,
+			// the limits let go while the screen is lit (boost_screen)
+			boosted: stat('/var/run/hotspotdata.boost') != null,
 			service
 		};
 	}

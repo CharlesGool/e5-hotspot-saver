@@ -1,7 +1,7 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "1.8",
+	"version": "1.9",
 	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
 	"description": { "zh": "关热点时关闭蜂窝或断开数据，开热点时恢复", "en": "Cellular follows the hotspot" },
 	"entry": "index.html",
@@ -39,6 +39,11 @@
 				{ "value": "two", "label": { "zh": "只留 2 个小核", "en": "Two little cores" } },
 				{ "value": "all", "label": { "zh": "全部保留", "en": "Keep all" } }
 			]
+		},
+		{
+			"id": "boost_screen", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.boost_screen", "default": "1",
+			"label": { "zh": "屏幕亮着时临时恢复全速", "en": "Full speed while the screen is lit" },
+			"note": { "zh": "亮屏 1 秒内放开核心和频率，熄屏 5 秒后恢复限制", "en": "Cores and clocks back within 1 s; limits again 5 s after it goes dark" }
 		},
 		{
 			"id": "off_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.off_delay", "default": "0",
