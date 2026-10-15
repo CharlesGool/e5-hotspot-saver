@@ -105,6 +105,9 @@ return function(ctx) {
 			radio: radio(),
 			// CPU/GPU held at their lowest clocks (the service's saved limits)
 			perf_low: stat('/var/run/hotspotdata.perf') != null,
+			// the cores the service took offline, and the kernel's online list ("0-5")
+			cores_off: length(filter(split(readfile('/var/run/hotspotdata.cores') ?? '', '\n'), l => l != '')),
+			cores_online: trim(readfile('/sys/devices/system/cpu/online') ?? '') || null,
 			service
 		};
 	}

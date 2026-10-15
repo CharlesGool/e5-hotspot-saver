@@ -68,6 +68,9 @@ function draw() {
 		row(e5.t({ zh: '蜂窝', en: 'Cellular' }), cell[0], cell[1]) +
 		row(e5.t({ zh: 'CPU / GPU', en: 'CPU / GPU' }),
 			st.perf_low ? e5.t({ zh: '锁最低频率', en: 'Lowest clocks' }) : e5.t({ zh: '正常', en: 'Normal' }), st.perf_low ? 'off' : 'good') +
+		row(e5.t({ zh: 'CPU 核心', en: 'CPU cores' }),
+			(st.cores_off > 0 ? e5.t({ zh: `已关 ${st.cores_off} 个`, en: `${st.cores_off} off` }) + ' · ' : '') +
+			e5.t({ zh: '在线 ', en: 'online ' }) + esc(st.cores_online ?? '--'), st.cores_off > 0 ? 'off' : 'good') +
 		row(e5.t({ zh: '后台服务', en: 'Service' }),
 			st.service ? e5.t({ zh: '运行中', en: 'Running' }) : e5.t({ zh: '未运行', en: 'Stopped' }), st.service ? 'good' : 'poor');
 	$('toggle').textContent = st.enabled ? e5.t({ zh: '关闭联动', en: 'Turn linking off' })
