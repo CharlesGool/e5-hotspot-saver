@@ -6,6 +6,16 @@
 
 容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.3**，应用 ID `hotspotdata`。
 
+## 截图
+
+<img src="screenshots/hotspot-saver.png" alt="热点省电" width="320">
+
+设备屏幕上的热点省电页面：省电开关、热点、移动数据、蜂窝、CPU / GPU、蓝牙、熄屏刷新、CPU 核心和后台服务的当前状态。
+
+![各状态平均功率](screenshots/power-by-state.jpg)
+
+用[功率监测](https://github.com/CharlesGool/e5-powermon)实测：熄屏、热点开、省电未生效时平均 1455 mW（满电约 8.4 小时）；熄屏、热点关、省电生效时平均 332 mW（满电约 37.4 小时）。
+
 ## 安装
 
 1. 下载 [`releases/hotspotdata-v2.3.tar.gz`](releases/hotspotdata-v2.3.tar.gz)。
