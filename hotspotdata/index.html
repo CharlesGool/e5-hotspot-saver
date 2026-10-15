@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+	html, body { margin: 0; background: #0b0e13; color: #e8ecf2;
+		font-family: "Noto Sans CJK SC", "DejaVu Sans", sans-serif; user-select: none; cursor: none; }
+	body { padding: 8px; }
+	.card { background: #161b23; border-radius: 10px; padding: 9px 11px; margin-bottom: 7px; }
+	.row { display: flex; justify-content: space-between; align-items: baseline; }
+	.row + .row { margin-top: 6px; }
+	.sub { color: #8b95a5; font-size: 12px; line-height: 1.5; }
+	.val { font-weight: bold; }
+	.good { color: #3ccf7a; } .fair { color: #f2c14b; } .off { color: #8b95a5; } .poor { color: #f0625a; }
+	button { font: inherit; color: #e8ecf2; background: #232a35; border: 0; border-radius: 8px;
+		padding: 9px; width: 100%; outline: none; }
+	button:focus { box-shadow: 0 0 0 2px #fff; }
+</style>
+</head>
+<body>
+<div class="card" id="state"></div>
+<button id="toggle"></button>
+<div class="sub" id="note" style="margin-top:7px"></div>
+<script src="/sdk/e5.js"></script>
+<script>
+'use strict';
+// The linking runs in the background service; this page shows it and turns
+// it on and off.  The delay is under 高级 -> 热点联动数据.
+const $ = (id) => document.getElementById(id);
+let st = null, busy = false;
+
+function row(label, text, cls) {
+	return `<div class="row"><span>${label}</span><span class="val ${cls}">${text}</span></div>`;
+}
+
+function draw() {
+	if (!st) {
+		$('state').innerHTML = `<div class="sub">${e5.t({ zh: '读取中…', en: 'Loading…' })}</div>`;
+		return;
+	}
+	const h = st.hotspot, d = st.data;
+	const data = d.up ? [e5.t({ zh: '已连接', en: 'Connected' }), 'good']
+		: d.pending ? [e5.t({ zh: '连接中', en: 'Connecting' }), 'fair']
+		: [e5.t({ zh: '已断开', en: 'Off' }), 'off'];
+	$('state').innerHTML =
+		row(e5.t({ zh: '联动', en: 'Linking' }),
+			st.enabled ? e5.t({ zh: '开启', en: 'On' }) : e5.t({ zh: '关闭', en: 'Off' }), st.enabled ? 'good' : 'off') +
+		row(e5.t({ zh: '热点', en: 'Hotspot' }),
+			!h.available ? e5.t({ zh: '未配置', en: 'None' }) : h.on ? e5.t({ zh: '开启', en: 'On' }) : e5.t({ zh: '关闭', en: 'Off' }),
+			h.on ? 'good' : 'off') +
+		row(e5.t({ zh: '移动数据', en: 'Mobile data' }), data[0], data[1]) +
+		row(e5.t({ zh: '后台服务', en: 'Service' }),
+			st.service ? e5.t({ zh: '运行中', en: 'Running' }) : e5.t({ zh: '未运行', en: 'Stopped' }), st.service ? 'good' : 'poor');
+	$('toggle').textContent = st.enabled ? e5.t({ zh: '关闭联动', en: 'Turn linking off' })
+		: e5.t({ zh: '开启联动', en: 'Turn linking on' });
+	const delay = st.off_delay > 0
+		? e5.t({ zh: `关热点 ${st.off_delay} 分钟后断开数据。`, en: `Data goes off ${st.off_delay} min after the hotspot.` })
+		: e5.t({ zh: '关热点后立即断开数据。', en: 'Data goes off with the hotspot.' });
+	$('note').textContent = st.enabled
+		? delay + e5.t({ zh: '开热点时自动连接数据。热点开着时手动关掉的数据不会被打开。',
+			en: ' Turning the hotspot on brings data up; data turned off by hand while it is on stays off.' })
+		: e5.t({ zh: '联动已关闭，移动数据按正常方式工作。', en: 'Linking is off: mobile data works as usual.' });
+}
+
+async function load() {
+	try { st = await e5.api('/status'); } catch (e) { e5.toast(e.message); }
+	draw();
+}
+
+async function toggle() {
+	if (busy || !st) return;
+	busy = true;
+	try { st = await e5.api('/enabled', { body: { on: !st.enabled } }); }
+	catch (e) { e5.toast(e.message); }
+	busy = false;
+	draw();
+}
+
+e5.onKey((k) => {
+	if (k.kind == 'ok') { toggle(); return true; }
+	return false;
+});
+$('toggle').addEventListener('click', toggle);
+draw();
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>

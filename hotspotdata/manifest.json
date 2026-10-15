@@ -1,0 +1,21 @@
+{
+	"id": "hotspotdata",
+	"api_version": 2,
+	"version": "1.0",
+	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
+	"description": { "zh": "关热点时断开移动数据，开热点时恢复", "en": "Mobile data follows the hotspot" },
+	"entry": "index.html",
+	"order": 40,
+	"notifications": true,
+	"settings": [
+		{
+			"id": "enabled", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.enabled", "default": "1",
+			"label": { "zh": "数据跟随热点", "en": "Data follows hotspot" }
+		},
+		{
+			"id": "off_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.off_delay", "default": "0",
+			"min": 0, "max": 30, "step": 1, "unit": "min",
+			"label": { "zh": "关热点后延迟断开（分钟）", "en": "Delay after hotspot off (min)" }
+		}
+	]
+}

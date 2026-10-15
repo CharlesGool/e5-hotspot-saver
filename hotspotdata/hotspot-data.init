@@ -1,0 +1,16 @@
+#!/bin/sh /etc/rc.common
+# 热点省电 (Hotspot Power Saver): the hotspotdata info screen app's background service
+# (/etc/e5-infoscreen/plugins/hotspotdata/service.sh).  Installed by the app's
+# backend; it removes itself when the app is removed.
+START=99
+USE_PROCD=1
+
+SCRIPT=/etc/e5-infoscreen/plugins/hotspotdata/service.sh
+
+start_service() {
+	[ -f "$SCRIPT" ] || return 0
+	procd_open_instance
+	procd_set_param command /bin/sh "$SCRIPT"
+	procd_set_param respawn 3600 5 0
+	procd_close_instance
+}
