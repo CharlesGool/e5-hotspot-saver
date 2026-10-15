@@ -1,9 +1,9 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "1.0",
+	"version": "1.1",
 	"name": { "zh": "热点联动数据", "en": "Hotspot data link" },
-	"description": { "zh": "关热点时断开移动数据，开热点时恢复", "en": "Mobile data follows the hotspot" },
+	"description": { "zh": "关热点时关闭蜂窝或断开数据，开热点时恢复", "en": "Cellular follows the hotspot" },
 	"entry": "index.html",
 	"order": 40,
 	"notifications": true,
@@ -11,6 +11,14 @@
 		{
 			"id": "enabled", "type": "toggle", "uci": "e5-plugin-hotspotdata.settings.enabled", "default": "1",
 			"label": { "zh": "数据跟随热点", "en": "Data follows hotspot" }
+		},
+		{
+			"id": "mode", "type": "choice", "uci": "e5-plugin-hotspotdata.settings.mode", "default": "radio",
+			"label": { "zh": "关热点时", "en": "With the hotspot off" },
+			"options": [
+				{ "value": "radio", "label": { "zh": "关闭蜂窝（最省电，收不到短信电话）", "en": "Cellular off (least power, no SMS or calls)" } },
+				{ "value": "data", "label": { "zh": "只断数据（短信电话正常）", "en": "Data off only (SMS and calls work)" } }
+			]
 		},
 		{
 			"id": "off_delay", "type": "number", "uci": "e5-plugin-hotspotdata.settings.off_delay", "default": "0",

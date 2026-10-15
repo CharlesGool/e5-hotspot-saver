@@ -4,7 +4,7 @@
 // the notification poll (manifest "notifications") puts it back -- and serves
 // the app's page.
 //
-//   GET  /status          the hotspot, mobile data, the service, the settings
+//   GET  /status          the hotspot, mobile data, the modem, the service, the settings
 //   POST /enabled         {"on": true|false}
 //   GET  /notifications   (none: only the service check, once a minute)
 
@@ -36,6 +36,11 @@ return function(ctx) {
 		}
 		else if (!running())
 			ctx.run(`'${INIT}' enable; '${INIT}' start >/dev/null 2>&1`);
+		// (a reinstalled app: service.sh changed under the running one)
+		else if (readfile(`${DIR}/service.sh`) != readfile('/var/run/hotspotdata.running')) {
+			ctx.run(`'${INIT}' restart >/dev/null 2>&1`);
+			ctx.log('service restarted for the new version');
+		}
 		return running();
 	}
 
@@ -64,12 +69,21 @@ return function(ctx) {
 		};
 	}
 
+	// ModemManager's state of the modem (disabled, registered, ...), null without one
+	function modem() {
+		let out = ctx.sh("mmcli -m any -K 2>/dev/null | sed -n 's/^modem\\.generic\\.state *: *//p' | head -n 1") ?? '';
+		out = trim(out);
+		return out == '' ? null : out;
+	}
+
 	function status(service) {
 		return {
 			enabled: setting('enabled', '1') != '0',
+			mode: setting('mode', 'radio') == 'data' ? 'data' : 'radio',
 			off_delay: +setting('off_delay', '0'),
 			hotspot: hotspot(),
 			data: data(),
+			modem: modem(),
 			service
 		};
 	}
