@@ -30,6 +30,10 @@
 const $ = (id) => document.getElementById(id);
 let st = null, busy = false;
 
+function esc(s) {
+	return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function row(label, text, cls) {
 	return `<div class="row"><span>${label}</span><span class="val ${cls}">${text}</span></div>`;
 }
@@ -43,13 +47,16 @@ function draw() {
 	const data = d.up ? [e5.t({ zh: '已连接', en: 'Connected' }), 'good']
 		: d.pending ? [e5.t({ zh: '连接中', en: 'Connecting' }), 'fair']
 		: [e5.t({ zh: '已断开', en: 'Off' }), 'off'];
-	// ModemManager's modem states, in two words
-	const m = st.modem;
-	const cell = m == null ? [e5.t({ zh: '无基带', en: 'No modem' }), 'poor']
-		: m == 'disabled' ? [e5.t({ zh: '已关闭', en: 'Off' }), 'off']
-		: ['disabling', 'enabling', 'initializing'].includes(m) ? [e5.t({ zh: '切换中', en: 'Changing' }), 'fair']
-		: ['failed', 'locked', 'unknown'].includes(m) ? [m, 'poor']
-		: [e5.t({ zh: '已开启', en: 'On' }), 'good'];
+	// The card's radio as the AT owner reads it (the status bar's source);
+	// ModemManager's state only while that reading is unavailable: its
+	// "disabled" does not mean the radio is off on this modem.
+	const r = st.radio ?? {}, m = st.modem;
+	const sim = r.card == null ? '' : ` · SIM ${r.card + 1}`;
+	const cell = r.known
+		? (r.off ? [e5.t({ zh: '射频已关闭', en: 'Radio off' }) + sim, 'off']
+			: [[r.operator, r.label].filter(Boolean).map(esc).join(' ') || e5.t({ zh: '射频开启', en: 'Radio on' }), 'good'])
+		: m == null ? [e5.t({ zh: '无基带', en: 'No modem' }), 'poor']
+		: [e5.t({ zh: '读取中', en: 'Reading' }) + ` (MM ${esc(m)})`, 'fair'];
 	$('state').innerHTML =
 		row(e5.t({ zh: '联动', en: 'Linking' }),
 			st.enabled ? e5.t({ zh: '开启', en: 'On' }) : e5.t({ zh: '关闭', en: 'Off' }), st.enabled ? 'good' : 'off') +

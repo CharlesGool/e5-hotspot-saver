@@ -4,7 +4,7 @@
 // the notification poll (manifest "notifications") puts it back -- and serves
 // the app's page.
 //
-//   GET  /status          the hotspot, mobile data, the modem, the service, the settings
+//   GET  /status          the hotspot, mobile data, the radio, the service, the settings
 //   POST /enabled         {"on": true|false}
 //   GET  /notifications   (none: only the service check, once a minute)
 
@@ -76,6 +76,21 @@ return function(ctx) {
 		return out == '' ? null : out;
 	}
 
+	// The data card's radio as the AT owner sees it (t551m-sim-status, every
+	// 5 s; "disabled" is CFUN not 1) -- what the status bar shows, and the
+	// truth where ModemManager's "disabled" is not: no AT in a request here.
+	function radio() {
+		let card = trim(readfile('/sys/module/sipc_wwan/parameters/card') ?? '0') == '1' ? 1 : 0;
+		let d = null;
+		try { d = json(readfile('/run/t551m-sims.json') ?? 'null'); } catch (e) {}
+		let now = +(split(readfile('/proc/uptime') ?? '0', ' ')[0]);
+		let s = d?.sims?.[card];
+		if (s == null || s.error || now - s.updated > 15 || now < s.updated)
+			return { card, known: false };
+		return { card, known: true, off: s.registration == 'disabled',
+			registration: s.registration, operator: s.operator, label: s.radio_label };
+	}
+
 	function status(service) {
 		return {
 			enabled: setting('enabled', '1') != '0',
@@ -84,6 +99,7 @@ return function(ctx) {
 			hotspot: hotspot(),
 			data: data(),
 			modem: modem(),
+			radio: radio(),
 			service
 		};
 	}
