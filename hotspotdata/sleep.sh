@@ -92,15 +92,28 @@ wdt_on() { ubus call system watchdog '{"stop": false}' >/dev/null 2>&1; }
 # name -> wakeup_count (column 4: the events that ended a suspend)
 wsnap() { awk 'NR > 1 { print $1, $4 }' "$WS" 2>/dev/null; }
 
-# the sources whose wakeup_count went up, as a short label
+# irq -> total count, and its name joined with _ (the columns after the per-CPU
+# counts: only online CPUs have a column, and a suspend takes none away for good)
+irqsnap() {
+	awk 'NR > 1 { s = 0; for (i = 2; i <= NF && $i ~ /^[0-9]+$/; i++) s += $i
+		d = ""; for (; i <= NF; i++) d = d "_" $i; print $1, s, d }' /proc/interrupts
+}
+
+# what ended the suspend, as a short label.  A source's wakeup_count only goes
+# up while the kernel is checking for wakeup events, and a key behind the
+# PMIC's EIC is often handled after that ("unknown"): so the interrupts that
+# fired across the suspend count too -- a key among them is what woke us.
 woke_by() {
 	local names
-	names=$(awk 'NR == FNR { p[$1] = $2; next } $2 > p[$1] { print $1 }' "$RUN/ws.prev" "$RUN/ws.now" | tr '\n' ' ')
+	names=$(awk 'NR == FNR { p[$1] = $2; next } $2 > p[$1] { print $1 }' "$RUN/ws.prev" "$RUN/ws.now"
+		awk 'NR == FNR { p[$1] = $2; next } $2 > p[$1] && $3 ~ /Key|keypad|extcon|typec|rtc|mailbox|sdiohal|pub_int/ { print $3 }' \
+			"$RUN/irq.prev" "$RUN/irq.now")
+	names=$(echo $names)
 	case "$names" in
-		*gpio-keys*|*keypad*) echo key ;;
-		*rtc*) echo rtc ;;
+		*gpio-keys*|*keypad*|*Power_Key*|*Volume*|*voice_Key*) echo key ;;
 		*charger*|*vchg*|*aw322*|*usb*|*musb*|*typec*|*extcon*) echo power ;;
-		*sipc*|*smsg*|*sipa*|*modem*|*sbuf*) echo modem ;;
+		*rtc*) echo rtc ;;
+		*sipc*|*smsg*|*sipa*|*modem*|*sbuf*|*mailbox*) echo modem ;;
 		*sdiohal*|*pub_int*|*Wi-Fi*|*BT_*|*wcn*) echo wcn ;;
 		'') echo unknown ;;
 		*) echo other ;;
@@ -159,6 +172,7 @@ suspend_once() {
 	every=$(num "$(setting sleep_wake_every 0)" 0)
 	[ "$every" -gt 0 ] && echo "+$((every * 60))" > "$RTC/wakealarm" 2>/dev/null
 	wsnap > "$RUN/ws.prev"
+	irqsnap > "$RUN/irq.prev"
 	put_state "asleep"
 	wdt_off
 	t0=$(boot_f); m0=$(mono_f)
@@ -170,6 +184,7 @@ suspend_once() {
 	wdt_on
 	t1=$(boot_f); m1=$(mono_f)
 	wsnap > "$RUN/ws.now"
+	irqsnap > "$RUN/irq.now"
 	by=$(woke_by)
 	d=$(awk -v a="$t0" -v b="$t1" -v c="$m0" -v e="$m1" 'BEGIN { d = (b - a) - (e - c); if (d < 0) d = 0; printf "%d", d }')
 	if [ "$rc" = ok ]; then

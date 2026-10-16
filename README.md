@@ -4,7 +4,7 @@
 
 *Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.5**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.6**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -18,7 +18,7 @@
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v2.5.tar.gz`](releases/hotspotdata-v2.5.tar.gz)。
+1. 下载 [`releases/hotspotdata-v2.6.tar.gz`](releases/hotspotdata-v2.6.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -95,7 +95,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 ## 版本
 
-- [v2.5](releases/hotspotdata-v2.5.tar.gz)（当前）：关热点后深度休眠；修复休眠后信号显示“状态未知”
+- [v2.6](releases/hotspotdata-v2.6.tar.gz)（当前）：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”
+- [v2.5](releases/hotspotdata-v2.5.tar.gz)：关热点后深度休眠；修复休眠后信号显示“状态未知”
 - [v2.3](releases/hotspotdata-v2.3.tar.gz)
 - [v2.2](releases/hotspotdata-v2.2.tar.gz)
 - [v2.1](releases/hotspotdata-v2.1.tar.gz)
