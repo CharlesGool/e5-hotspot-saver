@@ -17,6 +17,10 @@
 v2.7 起，从左到右：概览页运行时长下的 CPU 状态卡片（各核频率、CPU 7 已 OFF、负载走势）和带功率的“电流 / 电压 / 功率”；
 CPU 设置列表（每行显示调速器、最高频率和关闭状态）；CPU 0–5 设置页，调速器下的“关闭核心”；“关闭核心”的选项。
 
+<img src="screenshots/usb-settings.jpg" alt="USB 设置" width="200"> <img src="screenshots/usb-role.jpg" alt="USB 角色选项" width="200">
+
+v2.8 起：USB 设置页，以及“USB 角色”的选项，多了“关闭（仅充电）”。
+
 ![各状态平均功率](screenshots/power-by-state.jpg)
 
 用[功率监测](https://github.com/CharlesGool/e5-powermon)实测：熄屏、热点开、省电未生效时平均 1455 mW（满电约 8.4 小时）；熄屏、热点关、省电生效时平均 332 mW（满电约 37.4 小时）。
@@ -97,6 +101,8 @@ CPU 设置列表（每行显示调速器、最高频率和关闭状态）；CPU 
 `app.js` 之后，内容变化时屏幕重启一次）；卸载应用后卡片自动消失。
 
 ## USB 关闭（仅充电）
+
+<img src="screenshots/usb-role.jpg" alt="USB 角色选项" width="240">
 
 USB 设置（屏幕：设置 → 高级 → USB → USB 角色）多了一项 **关闭（仅充电）**：USB 接口只用来充电，
 数据完全关闭——插电脑看不到设备、USB 网络和 SSH 断开，插 U 盘、网卡等 USB 设备也不会被识别，
