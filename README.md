@@ -12,6 +12,11 @@
 
 设备屏幕上的热点省电页面：省电开关、热点、移动数据、蜂窝、CPU / GPU、蓝牙、熄屏刷新、CPU 核心和后台服务的当前状态。
 
+<img src="screenshots/cpu-overview.jpg" alt="概览页 CPU 状态" width="200"> <img src="screenshots/cpu-settings.jpg" alt="CPU 设置列表" width="200"> <img src="screenshots/cpu-domain.jpg" alt="CPU 0–5 设置页" width="200"> <img src="screenshots/cpu-cores-off.jpg" alt="关闭核心选项" width="200">
+
+v2.7 起，从左到右：概览页运行时长下的 CPU 状态卡片（各核频率、CPU 7 已 OFF、负载走势）和带功率的“电流 / 电压 / 功率”；
+CPU 设置列表（每行显示调速器、最高频率和关闭状态）；CPU 0–5 设置页，调速器下的“关闭核心”；“关闭核心”的选项。
+
 ![各状态平均功率](screenshots/power-by-state.jpg)
 
 用[功率监测](https://github.com/CharlesGool/e5-powermon)实测：熄屏、热点开、省电未生效时平均 1455 mW（满电约 8.4 小时）；熄屏、热点关、省电生效时平均 332 mW（满电约 37.4 小时）。
