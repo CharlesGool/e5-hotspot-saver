@@ -9,6 +9,7 @@
 #   (cores: CPU cores offline as well; boost_screen: not while the screen is lit)
 #   and with bt_off, Bluetooth off; with idle_off, the hotspot itself turned off
 #   when no device has used it for that many minutes
+#   and the CPU domains turned OFF on the screen's CPU page (cpu-off.sh) kept off
 #
 # The hotspot's state is its configuration: the first wifi-iface in mode ap and
 # its radio, not disabled -- what the screen, LuCI and the dashboard all change
@@ -178,6 +179,10 @@ sims_write_off() {
 CPUFREQ=/sys/devices/system/cpu/cpufreq
 DEVFREQ=/sys/class/devfreq
 PERF=/var/run/hotspotdata.perf
+# limits a restore could not write: their domain had no core online (OFF on
+# the CPU page), so it cannot be written; written once it has one again --
+# here, and by cpu-off.sh as it brings cores online for cpu-control
+PERF_PENDING=/var/run/hotspotdata.perf-pending
 perf_wanted() { [ "$(uci -q get "$CFG.settings.perf_low")" != 0 ]; }
 
 lowest() {
@@ -209,6 +214,8 @@ perf_low() {
 	: > "$PERF.new"
 	for p in "$CPUFREQ"/policy*; do
 		[ -f "$p/scaling_max_freq" ] || continue
+		# (no core online -- OFF on the CPU page: its limits cannot be read or written)
+		[ -n "$(cat "$p/affected_cpus" 2>/dev/null)" ] || continue
 		lo=$(lowest "$p/scaling_available_frequencies")
 		[ -n "$lo" ] || lo=$(cat "$p/cpuinfo_min_freq" 2>/dev/null)
 		[ -n "$lo" ] || continue
@@ -235,7 +242,9 @@ perf_restore() {
 	[ -f "$PERF" ] || return 0
 	while read -r path old ours; do
 		[ -n "$old" ] || continue
-		if [ -z "$ours" ] || [ "$(limit_now "$path")" = "$ours" ]; then
+		if ! cat "$path" >/dev/null 2>&1; then
+			echo "$path $old $ours" >> "$PERF_PENDING"
+		elif [ -z "$ours" ] || [ "$(limit_now "$path")" = "$ours" ]; then
 			echo "$old" > "$path" 2>/dev/null
 		else
 			kept=$((kept + 1))
@@ -246,6 +255,26 @@ perf_restore() {
 		log "warning: the CPU profile ($CPU_PROFILE) was saved while the clocks were held low; check it on the CPU page"
 	rm -f "$PERF"
 	info "CPU/GPU frequency limits restored"
+}
+
+# PERF_PENDING written where its domain is back (not while the clocks are held)
+perf_pending() {
+	local path old ours
+	[ -f "$PERF_PENDING" ] && [ ! -f "$PERF" ] || return 0
+	: > "$PERF_PENDING.new"
+	while read -r path old ours; do
+		if ! cat "$path" >/dev/null 2>&1; then
+			echo "$path $old $ours" >> "$PERF_PENDING.new"
+		elif [ "$(limit_now "$path")" = "$ours" ]; then
+			echo "$old" > "$path" 2>/dev/null
+		fi
+	done < "$PERF_PENDING"
+	if [ -s "$PERF_PENDING.new" ]; then
+		mv -f "$PERF_PENDING.new" "$PERF_PENDING"
+	else
+		rm -f "$PERF_PENDING.new" "$PERF_PENDING"
+		info "CPU frequency limits of a domain back online restored"
+	fi
 }
 
 # With the hotspot off (cores): CPU cores offline, after the clocks are held
@@ -264,6 +293,40 @@ CPUSYS=/sys/devices/system/cpu
 CORES=/var/run/hotspotdata.cores
 GUARD=/etc/hotspotdata.cpu-offline-guard
 VERIFIED=/etc/hotspotdata.cpu-offline-ok
+
+# The CPU page's OFF (cpu-off.sh, through the app's patch of settings.uc): the
+# domains turned off there (CPUOFF_LIST, its cores CPUOFF_CPUS; SAVED for the next boot with the
+# CPU profile on) stay off -- no core of theirs comes online with the hotspot
+# or a lit screen, and each full pass takes one that did offline again.  The
+# moves of cores here and in cpu-off.sh take CPU_LOCK (fd 8) in turn.
+CPUOFF=$DIR/cpu-off.sh
+CPUOFF_LIST=/var/run/hotspotdata.cpu-off
+CPUOFF_CPUS=/var/run/hotspotdata.cpu-off.cpus
+CPUOFF_SAVED=/etc/hotspotdata.cpu-off
+CPU_FULL=/var/run/hotspotdata.cpu-full.json
+CPU_LOCK=/var/run/hotspotdata.cpu.lock
+exec 8>"$CPU_LOCK"
+
+# a core of a domain turned off on the CPU page (never cpu0: cpu-off.sh keeps it)
+user_off() {
+	local l
+	[ "$1" != 0 ] || return 1
+	[ -f "$CPUOFF_CPUS" ] && grep -qx "$1" "$CPUOFF_CPUS"
+}
+
+# the app is gone: the CPU page's OFF given back, and its patch of the page out
+cpu_off_clear() {
+	local d
+	sed -i '/^\/\* BEGIN e5-hotspotdata/,/^\/\* END e5-hotspotdata \*\//d' \
+		/usr/share/e5-infoscreen/settings.uc 2>/dev/null
+	[ -f "$CPUOFF_LIST" ] || { rm -f "$CPUOFF_SAVED"; return 0; }
+	for d in "$CPUSYS"/cpu[0-9]*; do
+		[ -f "$d/online" ] && user_off "${d##*/cpu}" || continue
+		echo 1 > "$d/online" 2>/dev/null
+	done
+	rm -f "$CPUOFF_LIST" "$CPUOFF_CPUS" "$CPUOFF_SAVED" "$CPU_FULL"
+	log "CPU page OFF: every domain on again"
+}
 
 cores_mode() {
 	case "$(uci -q get "$CFG.settings.cores")" in
@@ -284,15 +347,36 @@ little_cpus() {
 	[ -n "$best" ] && cat "$best/related_cpus" 2>/dev/null
 }
 
-cores_off() {
+cores_off() { flock 8; _cores_off; flock -u 8; }
+cores_on() { flock 8; _cores_on; flock -u 8; }
+
+# The cores to keep, without those OFF on the CPU page; topped up to two
+# (the lowest-numbered of the rest), so that OFF there and the shutdown here
+# together never leave a single core.
+keep_two() {
+	local c n=0 out=
+	for c in "$@"; do user_off "$c" || { out="$out $c"; n=$((n + 1)); }; done
+	for c in $(ls "$CPUSYS" | sed -n "s/^cpu\([0-9][0-9]*\)$/\1/p" | sort -n); do
+		[ "$n" -lt 2 ] || break
+		case " $out " in *" $c "*) continue ;; esac
+		user_off "$c" && continue
+		out="$out $c"; n=$((n + 1))
+	done
+	echo $out
+}
+
+_cores_off() {
 	local mode keep d c n=0
 	mode=$(cores_mode)
-	if [ "$mode" = all ]; then cores_on; return; fi
+	if [ "$mode" = all ]; then _cores_on; return; fi
 	[ "$(cat "$CORES.mode" 2>/dev/null)" = "$mode" ] && return
-	cores_on                               # (a mode change: from all cores)
+	_cores_on                              # (a mode change: from all cores)
+	# (every domain whole once, for the CPU page to draw one that goes offline)
+	[ -f "$CPU_FULL" ] || [ ! -f "$CPUOFF" ] || sh "$CPUOFF" snapshot
 	keep=$(little_cpus)
 	[ -n "$keep" ] || { log "no CPU clusters found: no core goes offline"; return; }
 	[ "$mode" = two ] && keep=$(echo $keep | tr ' ' '\n' | sort -n | head -n 2 | tr '\n' ' ')
+	keep=$(keep_two $keep)
 	# (the guard only until it has worked once here: then no flash write per screen-off)
 	[ -f "$VERIFIED" ] || { : > "$GUARD"; sync; guarding=1; }
 	: > "$CORES"
@@ -314,10 +398,11 @@ cores_off() {
 	info "hotspot off: $n CPU cores offline (kept: $(echo $keep))"
 }
 
-cores_on() {
+_cores_on() {
 	local c n=0
 	[ -f "$CORES" ] || return 0
 	while read -r c; do
+		user_off "$c" && continue           # (OFF on the CPU page meanwhile)
 		if echo 1 > "$CPUSYS/cpu$c/online" 2>/dev/null; then n=$((n + 1)); else log "cpu$c cannot come online"; fi
 	done < "$CORES"
 	rm -f "$CORES" "$CORES.mode"
@@ -741,6 +826,7 @@ give_back() {
 
 # the app is gone: data back to normal, and this service with it
 remove_self() {
+	cpu_off_clear
 	give_back
 	log "app removed: mobile data restored, service removed"
 	"$INIT" disable 2>/dev/null
@@ -762,9 +848,24 @@ trap 'watch_resume; exit 0' TERM INT HUP
 if [ -f "$GUARD" ]; then
 	rm -f "$GUARD"; sync
 	uci set "$CFG.settings.cores=all" && uci commit "$CFG"
+	rm -f "$CPUOFF_SAVED"
 	log "the last CPU core shutdown did not finish (a crash, or power lost): core shutdown turned off"
 fi
 guard_until=
+
+# The CPU page's OFF saved with the CPU profile: off again at boot (only
+# after a boot is the runtime list gone with SAVED still there), under the
+# same flash guard as the core shutdown; without the profile, not kept.
+if [ -f "$CPUOFF_SAVED" ] && [ ! -f "$CPUOFF_LIST" ] && [ -f "$CPUOFF" ]; then
+	if [ -f "$CPU_PROFILE" ]; then
+		cp "$CPUOFF_SAVED" "$CPUOFF_LIST"
+		[ -f "$VERIFIED" ] || { : > "$GUARD"; sync; guard_until=$(($(uptime_s) + 30)); }
+		sh "$CPUOFF" apply
+		log "CPU page OFF at boot: $(echo $(cat "$CPUOFF_LIST"))"
+	else
+		rm -f "$CPUOFF_SAVED"
+	fi
+fi
 dark_since=
 boost=0
 
@@ -843,6 +944,9 @@ full_pass() {
 			fi
 		fi
 	fi
+	perf_pending
+	# the CPU page's OFF, whatever brought a core online
+	[ -s "$CPUOFF_LIST" ] && [ -f "$CPUOFF" ] && sh "$CPUOFF" apply
 	if screen_lit; then screen_was=1; else screen_was=0; fi
 }
 

@@ -18,10 +18,16 @@
 // unpatched app.js; the notification poll patches it again and the screen
 // restarts once.  The volkeys app patches the same file elsewhere, between
 // its own markers.
+//
+// settings.uc is patched too (cpu-patch.uc, before system_cat): the CPU page
+// (设置 → 系统 → CPU 设置) gets OFF among each domain's maximum frequencies,
+// and every change there goes through cpu-off.sh.  api.uc loads settings.uc
+// for every request, so no restart; a patched file that does not compile is
+// not written.  An image update brings it unpatched: patched again the same way.
 
 'use strict';
 
-import { readfile, writefile, rename, stat } from 'fs';
+import { readfile, writefile, rename, stat, unlink } from 'fs';
 
 const DIR = '/etc/e5-infoscreen/plugins/hotspotdata';
 const INIT = '/etc/init.d/hotspot-data';
@@ -31,6 +37,9 @@ const FN_ANCHOR = 'async function poll() {';
 const POLL_OLD = 'pollTimer = setTimeout(poll, blank ? POLL_BLANK : POLL_AWAKE);';
 const POLL_NEW = 'pollTimer = setTimeout(poll, blank ? hotspotdataBlankPoll() : POLL_AWAKE);';
 const BEGIN = '/* BEGIN e5-hotspotdata';
+const SETTINGS = '/usr/share/e5-infoscreen/settings.uc';
+const SETTINGS_ANCHOR = 'const system_cat = {';
+const CPU_ANCHOR = 'const cpu_categories = [';
 // t551m-sim-status stamps its readings with time.monotonic(), which stops in
 // deep sleep, while the screen and this app compare them with /proc/uptime
 // (boottime): after the first suspend each reading looked older than 15 s and
@@ -48,12 +57,17 @@ const END = '/* END e5-hotspotdata */\n';
 return function(ctx) {
 	function count(s, part) { return length(split(s, part)) - 1; }
 
-	// app.js without our block and with the poll line as it came
-	function strip(src) {
+	// a file without our block
+	function cut(src) {
 		let b = index(src, BEGIN), e = index(src, END);
 		if (b < 0 || e < b) return null;
-		src = substr(src, 0, b) + substr(src, e + length(END));
-		return join(POLL_OLD, split(src, POLL_NEW));
+		return substr(src, 0, b) + substr(src, e + length(END));
+	}
+
+	// app.js without our block and with the poll line as it came
+	function strip(src) {
+		src = cut(src);
+		return src == null ? null : join(POLL_OLD, split(src, POLL_NEW));
 	}
 
 	function restart_screen() {
@@ -68,6 +82,32 @@ return function(ctx) {
 			return false;
 		}
 		return true;
+	}
+
+	// settings.uc with this version of cpu-patch.uc: the CPU page's OFF
+	function ensure_cpu_patch() {
+		let src = readfile(SETTINGS), want = readfile(`${DIR}/cpu-patch.uc`);
+		if (src == null || want == null) return { patched: false, error: 'missing settings.uc or cpu-patch.uc' };
+		if (index(src, want) >= 0) return { patched: true };
+		if (index(src, BEGIN) >= 0) {
+			src = cut(src);
+			if (src == null) return { patched: false, error: 'cannot remove the older CPU page patch' };
+		}
+		if (count(src, SETTINGS_ANCHOR) != 1 || count(src, CPU_ANCHOR) != 1)
+			return { patched: false, error: 'this screen version has no CPU page to patch' };
+		let parts = split(src, SETTINGS_ANCHOR);
+		src = parts[0] + want + SETTINGS_ANCHOR + parts[1];
+		// (only a file that compiles: a broken settings.uc is every settings page gone)
+		let tmp = SETTINGS + '.hotspotdata-new';
+		let ok = writefile(tmp, src) != null;
+		if (ok)
+			try { loadfile(tmp, { raw_mode: true }); } catch (e) { ok = false; ctx.log(`settings.uc patch: ${e}`); }
+		if (!ok || !rename(tmp, SETTINGS)) {
+			unlink(tmp);
+			return { patched: false, error: 'cannot patch settings.uc' };
+		}
+		ctx.log('settings.uc patched (CPU page: OFF)');
+		return { patched: true };
 	}
 
 	// app.js with this version of poll-patch.js; the screen restarted when it changed
@@ -230,6 +270,12 @@ return function(ctx) {
 		};
 	}
 
+	// the cores OFF on the CPU page takes offline (cpu-off.sh's list), offline now or not
+	function cpu_off() {
+		let cpus = map(filter(split(readfile('/var/run/hotspotdata.cpu-off.cpus') ?? '', '\n'), l => l != ''), l => +l);
+		return sort(cpus, (a, b) => a - b);
+	}
+
 	// a value that may fail (a command, a file) without failing the status
 	function guarded(fn) {
 		try { return fn(); } catch (e) { ctx.log(`status: ${e}`); return null; }
@@ -249,6 +295,8 @@ return function(ctx) {
 			// the cores the service took offline, and the kernel's online list ("0-5")
 			cores_off: length(filter(split(readfile('/var/run/hotspotdata.cores') ?? '', '\n'), l => l != '')),
 			cores_online: trim(readfile('/sys/devices/system/cpu/online') ?? '') || null,
+			// the cores of the domains turned OFF on the CPU page
+			cpu_off: guarded(cpu_off),
 			// the limits let go while the screen is lit (boost_screen)
 			boosted: stat('/var/run/hotspotdata.boost') != null,
 			// Bluetooth powered off by the service, the idle auto-off, the dark-screen poll
@@ -273,6 +321,13 @@ return function(ctx) {
 			if (st.patch == null) {
 				st.patch = ensure_patch();
 				ctx.state_put('patch', st.patch);
+			}
+			// (and at once for a new cpu-patch.uc: a reinstalled app)
+			let mtime = stat(`${DIR}/cpu-patch.uc`)?.mtime;
+			st.cpu_patch = ctx.state_get('cpu_patch', 60);
+			if (st.cpu_patch == null || st.cpu_patch.mtime != mtime) {
+				st.cpu_patch = { ...ensure_cpu_patch(), mtime };
+				ctx.state_put('cpu_patch', st.cpu_patch);
 			}
 			return st;
 		},
@@ -321,6 +376,7 @@ return function(ctx) {
 				ctx.state_put('checked', { at: time() });
 				ensure_service();
 				ensure_patch();
+				ensure_cpu_patch();
 				ensure_simstat();
 			}
 			return { notifications: [] };

@@ -1,10 +1,10 @@
 # 热点省电 · Hotspot Power Saver
 
-关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复
+关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复；CPU 设置可关闭核心（OFF）
 
-*Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark*
+*Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.6**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.7**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -18,7 +18,7 @@
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v2.6.tar.gz`](releases/hotspotdata-v2.6.tar.gz)。
+1. 下载 [`releases/hotspotdata-v2.7.tar.gz`](releases/hotspotdata-v2.7.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -53,6 +53,32 @@
 - 射频关闭时熄屏刷新间隔（Dark-screen refresh with the radio off）：5 秒（原样）；30 秒；**1 分钟**；5 分钟
 - 关热点后延迟断开（分钟）（Delay after hotspot off (min)）：0–30 min，默认 0
 
+## CPU 设置中的关闭核心
+
+系统的 CPU 设置（屏幕：设置 → 系统 → CPU 设置）里，每个频率域（E5：CPU 0–5、CPU 6、CPU 7）的
+“调速器”下面多了一行 **关闭核心**，点进去选择：
+
+- 大核（CPU 6、CPU 7，各 1 个核心）：不关闭；**OFF（全部关闭）**。
+- 小核簇（CPU 0–5，6 个核心）：不关闭；**保留 1 个（CPU 0，启动核，始终保留）**、**保留 2 个（CPU 0–1）**、
+  **保留 4 个（CPU 0–3）**，其余核心离线。CPU 0 是启动核，不会被关闭。
+  想让两个大核跑、小核只留一个，就把 CPU 0–5 选成“保留 1 个”，在线的是 CPU 0、6、7。
+- 选“不关闭”即全部重新开启。核心关着时也可以改调速器和频率，不会把核心打开，开启后按新设置运行。
+- 整机至少保留 2 个核心在线：会少于 2 个的选项不显示，提交也会被拒绝（例如 CPU 6、7 都 OFF 后，
+  CPU 0–5 只能保留 2 个或 4 个）；“关热点时关闭 CPU 核心”保留的核心若被关掉，也会补一个其他核心，凑够 2 个。
+- CPU 设置列表的每行显示该域的调速器和最高频率，如“CPU 0–5 · schedutil · 1690 MHz”；关闭的域再标 “· OFF” 或 “· 保留 N 核”，页面显示离线核心；热点省电临时关掉的核心
+  也会如实显示，不再是空白。
+- 与系统调频一样只在本次开机有效；打开“开机应用调频与温控”时一并保存
+  （`/etc/hotspotdata.cpu-off`），开机后由本应用的服务再次关闭。若关核心导致死机，下次开机不再关闭。
+- 热点、亮屏恢复核心时不会打开关闭的核心；关热点期间改回“不关闭”，被“关热点时关闭 CPU 核心”管着的核心仍保持离线，开热点或亮屏时再打开。恢复默认会把 OFF 的核心全部打开。
+- 关热点锁最低频率期间被关闭的核心，恢复频率时写不进去，会记下来（`/var/run/hotspotdata.perf-pending`），等核心重新上线或在 CPU 设置里修改时补写，保存的开机配置也不会留下最低频率。
+- 系统 CPU 后端（`cpu-control`，LuCI 与屏幕共用）把没有在线核心的域读成空，开机配置若在这时保存，
+  下次开机会被拒绝（“CPU topology changed”）。所以屏幕 CPU 设置的每次修改都经由
+  `cpu-off.sh`：先临时打开离线的核心，调用 `cpu-control`，再关回去。LuCI 的 CPU 设置页没有经过它，
+  有核心关闭时请勿在 LuCI 里保存开机配置。
+
+实现：本应用给 `/usr/share/e5-infoscreen/settings.uc` 打补丁（`cpu-patch.uc`，与 `app.js` 的补丁同一标记），
+写入前先编译检查；镜像更新后一分钟内自动重打。卸载应用时打开 OFF 的核心并去掉补丁。
+
 ## 深度休眠
 
 OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内核和固件其实支持
@@ -86,6 +112,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 `hotspotdata/` 是当前版本安装包解压后的内容：
 
 - [`backend.uc`](hotspotdata/backend.uc)
+- [`cpu-off.sh`](hotspotdata/cpu-off.sh)
+- [`cpu-patch.uc`](hotspotdata/cpu-patch.uc)
 - [`hotspot-data.init`](hotspotdata/hotspot-data.init)
 - [`index.html`](hotspotdata/index.html)
 - [`manifest.json`](hotspotdata/manifest.json)
@@ -95,7 +123,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 ## 版本
 
-- [v2.6](releases/hotspotdata-v2.6.tar.gz)（当前）：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”
+- [v2.7](releases/hotspotdata-v2.7.tar.gz)（当前）：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
+- [v2.6](releases/hotspotdata-v2.6.tar.gz)：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”
 - [v2.5](releases/hotspotdata-v2.5.tar.gz)：关热点后深度休眠；修复休眠后信号显示“状态未知”
 - [v2.3](releases/hotspotdata-v2.3.tar.gz)
 - [v2.2](releases/hotspotdata-v2.2.tar.gz)

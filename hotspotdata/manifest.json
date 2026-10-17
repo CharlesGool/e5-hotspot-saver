@@ -1,9 +1,9 @@
 {
 	"id": "hotspotdata",
 	"api_version": 2,
-	"version": "2.6",
+	"version": "2.7",
 	"name": { "zh": "热点省电", "en": "Hotspot Power Saver" },
-	"description": { "zh": "关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复", "en": "Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark" },
+	"description": { "zh": "关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复；CPU 设置可关闭核心（OFF，小核可保留 1/2/4 个）", "en": "Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings" },
 	"entry": "index.html",
 	"order": 40,
 	"notifications": true,

@@ -110,8 +110,10 @@ function draw() {
 			st.blank_poll ? e5.t({ zh: `每 ${st.blank_poll / 1000} 秒`, en: `every ${st.blank_poll / 1000} s` })
 				: e5.t({ zh: '每 5 秒（原样）', en: 'every 5 s' }), st.blank_poll ? 'off' : 'good') +
 		row(e5.t({ zh: 'CPU 核心', en: 'CPU cores' }),
+			(st.cpu_off?.length ? e5.t({ zh: `CPU 设置关闭 ${st.cpu_off.join(' ')}`, en: `${st.cpu_off.join(' ')} OFF in CPU settings` }) + ' · ' : '') +
 			(st.cores_off > 0 ? e5.t({ zh: `已关 ${st.cores_off} 个`, en: `${st.cores_off} off` }) + ' · ' : '') +
-			e5.t({ zh: '在线 ', en: 'online ' }) + esc(st.cores_online ?? '--'), st.cores_off > 0 ? 'off' : 'good') +
+			e5.t({ zh: '在线 ', en: 'online ' }) + esc(st.cores_online ?? '--'),
+			st.cores_off > 0 || st.cpu_off?.length ? 'off' : 'good') +
 		sleepRow(st.sleep) +
 		row(e5.t({ zh: '后台服务', en: 'Service' }),
 			st.service ? e5.t({ zh: '运行中', en: 'Running' }) : e5.t({ zh: '未运行', en: 'Stopped' }), st.service ? 'good' : 'poor');
