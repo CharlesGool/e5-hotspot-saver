@@ -79,6 +79,18 @@
 实现：本应用给 `/usr/share/e5-infoscreen/settings.uc` 打补丁（`cpu-patch.uc`，与 `app.js` 的补丁同一标记），
 写入前先编译检查；镜像更新后一分钟内自动重打。卸载应用时打开 OFF 的核心并去掉补丁。
 
+## 概览页的 CPU 状态卡片
+
+概览页（运行时长卡片正下方）多了一张 **CPU 状态** 卡片：每个核心的当前频率（2 列，CPU 0–7），
+关闭的核心显示 OFF（CPU 设置里关闭）或“离线”（关热点时被热点省电关闭）；右上角在线核心数，
+底部整机 CPU 负载和调速器，右下角是最近约 80 秒的负载走势。只在概览页可见、屏幕亮着时每 2 秒
+刷新（`GET /api/plugins/hotspotdata/cores`），熄屏或切到别的页面时不请求。
+
+概览页的“电流 / 电压”一行也改为“电流 / 电压 / 功率”，在后面加上功率（电流 × 电压，如 `-350 mA · 4.12 V · -1.44 W`）。
+
+实现：本应用给 `/usr/share/e5-infoscreen/www/index.html` 注入卡片脚本（`cores-card.html`，放在
+`app.js` 之后，内容变化时屏幕重启一次）；卸载应用后卡片自动消失。
+
 ## 深度休眠
 
 OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内核和固件其实支持
@@ -114,6 +126,7 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 - [`backend.uc`](hotspotdata/backend.uc)
 - [`cpu-off.sh`](hotspotdata/cpu-off.sh)
 - [`cpu-patch.uc`](hotspotdata/cpu-patch.uc)
+- [`cores-card.html`](hotspotdata/cores-card.html)
 - [`hotspot-data.init`](hotspotdata/hotspot-data.init)
 - [`index.html`](hotspotdata/index.html)
 - [`manifest.json`](hotspotdata/manifest.json)
@@ -123,7 +136,7 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 ## 版本
 
-- [v2.7](releases/hotspotdata-v2.7.tar.gz)（当前）：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
+- [v2.7](releases/hotspotdata-v2.7.tar.gz)（当前）：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；概览页增加 CPU 状态卡片、电流电压后显示功率；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
 - [v2.6](releases/hotspotdata-v2.6.tar.gz)：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”
 - [v2.5](releases/hotspotdata-v2.5.tar.gz)：关热点后深度休眠；修复休眠后信号显示“状态未知”
 - [v2.3](releases/hotspotdata-v2.3.tar.gz)

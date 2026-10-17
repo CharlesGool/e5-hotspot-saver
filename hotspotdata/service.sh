@@ -314,11 +314,14 @@ user_off() {
 	[ -f "$CPUOFF_CPUS" ] && grep -qx "$1" "$CPUOFF_CPUS"
 }
 
-# the app is gone: the CPU page's OFF given back, and its patch of the page out
+# the app is gone: the CPU page's OFF given back, and its patches of the page
+# and of the overview (its CPU card, at the screen's next start) out
 cpu_off_clear() {
 	local d
 	sed -i '/^\/\* BEGIN e5-hotspotdata/,/^\/\* END e5-hotspotdata \*\//d' \
 		/usr/share/e5-infoscreen/settings.uc 2>/dev/null
+	sed -i '/^<!-- BEGIN e5-hotspotdata/,/^<!-- END e5-hotspotdata -->/d' \
+		/usr/share/e5-infoscreen/www/index.html 2>/dev/null
 	[ -f "$CPUOFF_LIST" ] || { rm -f "$CPUOFF_SAVED"; return 0; }
 	for d in "$CPUSYS"/cpu[0-9]*; do
 		[ -f "$d/online" ] && user_off "${d##*/cpu}" || continue

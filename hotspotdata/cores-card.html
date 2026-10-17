@@ -1,0 +1,111 @@
+<!-- BEGIN e5-hotspotdata (the hotspotdata app, /etc/e5-infoscreen/plugins/hotspotdata) -->
+<script>
+// The overview's CPU card, right under its first one (the rates, with the
+// uptime): each core's clock (or OFF: on the CPU page, 离线:
+// the hotspot-off core shutdown), the load of them all behind it as it went,
+// and how many are online -- from the hotspotdata app's GET /cores, every 2 s
+// while the overview is shown and the screen lit.  Without the app (404) the
+// card goes.  And the overview's 电流 / 电压 row with the power as well.
+(function () {
+	const API = '/api/plugins/hotspotdata/cores', KEEP = 40;
+	const css = document.createElement('style');
+	css.textContent =
+		'.hsd-cores { position: relative; overflow: hidden; }' +
+		'.hsd-cores .hsd-head, .hsd-cores .hsd-foot { display: flex; justify-content: space-between; position: relative; }' +
+		'.hsd-cores .hsd-title { color: var(--good); font-weight: bold; font-size: calc(14px * var(--ui-scale, 1)); }' +
+		'.hsd-cores .hsd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; margin: 6px 0 4px; position: relative; }' +
+		'.hsd-cores .hsd-core { display: flex; align-items: baseline; gap: 8px; }' +
+		'.hsd-cores .hsd-n { color: var(--dim); font-size: calc(12px * var(--ui-scale, 1)); min-width: 1.6em; }' +
+		'.hsd-cores .hsd-f { font-size: calc(22px * var(--ui-scale, 1)); font-variant-numeric: tabular-nums; white-space: nowrap; }' +
+		'.hsd-cores .hsd-f small { color: var(--dim); font-size: calc(13px * var(--ui-scale, 1)); margin-left: 3px; }' +
+		'.hsd-cores .hsd-f.off { color: var(--dim); }' +
+		'.hsd-cores .hsd-foot { color: var(--dim); font-size: calc(13px * var(--ui-scale, 1)); }' +
+		'.hsd-cores svg { position: absolute; right: 0; bottom: 0; width: 45%; height: 70%; pointer-events: none; }' +
+		'.hsd-cores svg path { fill: var(--good); opacity: 0.22; }';
+	document.head.appendChild(css);
+
+	// (under the rates card -- mobile.js puts its USB card there too, so the
+	// place is looked at again at each render -- or else under the temperatures)
+	const after = document.querySelector('[data-title="overview"] .rates') || document.getElementById('ov-temps');
+	if (!after) return;
+	const card = document.createElement('div');
+	card.className = 'card hsd-cores';
+	card.innerHTML = '<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d=""></path></svg>' +
+		'<div class="hsd-head"><span class="hsd-title"></span><span class="hsd-on sub"></span></div>' +
+		'<div class="hsd-grid"></div><div class="hsd-foot"><span class="hsd-load"></span><span class="hsd-gov"></span></div>';
+	card.hidden = true;
+	after.after(card);
+
+	const zh = () => typeof lang === 'undefined' || lang == 'zh';
+	const shown = () => !document.hidden && !(typeof blank !== 'undefined' && blank) &&
+		(typeof page === 'undefined' || page === 0);
+	const q = (s) => card.querySelector(s);
+	let prev = null, loads = [], gone = false;
+
+	function render(r) {
+		let load = null;
+		if (prev && r.stat && r.stat.total > prev.total)
+			load = Math.max(0, Math.min(100, Math.round((r.stat.busy - prev.busy) / (r.stat.total - prev.total) * 100)));
+		prev = r.stat;
+		if (load != null) {
+			loads.push(load);
+			if (loads.length > KEEP) loads.shift();
+		}
+		const cpus = r.cpus || [];
+		q('.hsd-title').textContent = zh() ? 'CPU 状态' : 'CPU status';
+		q('.hsd-on').textContent = (zh() ? '在线 ' : 'online ') + cpus.filter((c) => c.online).length + '/' + cpus.length;
+		q('.hsd-grid').innerHTML = cpus.map((c) =>
+			'<div class="hsd-core"><span class="hsd-n">' + c.id + '</span>' +
+			(c.online
+				? '<span class="hsd-f">' + Math.round(c.mhz) + '<small>MHz</small></span>'
+				: '<span class="hsd-f off">' + (c.off == 'page' ? 'OFF' : zh() ? '离线' : 'offline') + '</span>') +
+			'</div>').join('');
+		q('.hsd-load').textContent = (zh() ? 'CPU 负载 ' : 'CPU load ') + (load == null ? '--' : load + '%');
+		q('.hsd-gov').textContent = (r.governors || []).join(' · ');
+		// the load as it went, right to left, as an area (up to its peak, 20 % at least)
+		const n = loads.length, top = Math.max(20, ...loads);
+		q('path').setAttribute('d', n < 2 ? '' :
+			'M100,100 ' + loads.map((v, i) => 'L' + (100 - (n - 1 - i) * (100 / (KEEP - 1))).toFixed(1) + ',' + (100 - v / top * 90).toFixed(1)).reverse().join(' ') +
+			' L' + (100 - (n - 1) * (100 / (KEEP - 1))).toFixed(1) + ',100 Z');
+		if (after.nextElementSibling !== card) after.after(card);
+		card.hidden = false;
+	}
+
+	async function tick() {
+		if (gone) return;
+		setTimeout(tick, 2000);
+		if (!shown()) { prev = null; return; }
+		try {
+			const res = await fetch(API, { cache: 'no-store' });
+			if (res.status == 404) { gone = true; card.remove(); return; }
+			if (res.ok) render(await res.json());
+		} catch (e) {}
+	}
+	tick();
+})();
+
+// 电流 / 电压 → 电流 / 电压 / 功率: app.js writes the row ("-350 mA · 4.12 V")
+// at each status poll; the power, current times voltage, goes after it.
+(function () {
+	const row = document.getElementById('ov-power');
+	if (!row) return;
+	const label = row.parentElement && row.parentElement.querySelector('.label');
+	function add() {
+		if (label) {
+			label.removeAttribute('data-t');
+			label.textContent = typeof lang === 'undefined' || lang == 'zh' ? '电流 / 电压 / 功率' : 'Current / voltage / power';
+		}
+		if (row.querySelector('.hsd-w')) return;
+		const ma = /(-?\d+)\s*mA/.exec(row.textContent), v = /([\d.]+)\s*V\b/.exec(row.textContent);
+		if (!ma || !v) return;
+		const w = (+ma[1]) * (+v[1]) / 1000;
+		const span = document.createElement('span');
+		span.className = 'hsd-w';
+		span.textContent = ' · ' + (w > 0 && +ma[1] >= 20 ? '+' : '') + w.toFixed(2) + ' W';
+		row.appendChild(span);
+	}
+	new MutationObserver(add).observe(row, { childList: true, subtree: true, characterData: true });
+	add();
+})();
+</script>
+<!-- END e5-hotspotdata -->

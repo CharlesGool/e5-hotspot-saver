@@ -9,6 +9,8 @@
 //   POST /enabled         {"on": true|false}
 //   POST /sleep           {"on": true|false}: the deep sleep
 //   GET  /blank-poll      {ms}: the dark screen's poll, for the patched app.js
+//   GET  /cores           each CPU core (online, MHz, off by whom), /proc/stat's
+//                         busy and total, the governors: the overview's CPU card
 //   POST /unpatch         app.js without poll-patch.js, the screen restarted
 //   GET  /notifications   (none: only the service and patch checks, once a minute)
 //
@@ -20,14 +22,17 @@
 // its own markers.
 //
 // settings.uc is patched too (cpu-patch.uc, before system_cat): the CPU page
-// (设置 → 系统 → CPU 设置) gets OFF among each domain's maximum frequencies,
+// (设置 → 系统 → CPU 设置) gets a 关闭核心 row under each domain's governor,
 // and every change there goes through cpu-off.sh.  api.uc loads settings.uc
 // for every request, so no restart; a patched file that does not compile is
 // not written.  An image update brings it unpatched: patched again the same way.
+//
+// And index.html (cores-card.html, after app.js): the overview's CPU card,
+// which asks GET /cores.  The screen restarts when that changes.
 
 'use strict';
 
-import { readfile, writefile, rename, stat, unlink } from 'fs';
+import { readfile, writefile, rename, stat, unlink, glob } from 'fs';
 
 const DIR = '/etc/e5-infoscreen/plugins/hotspotdata';
 const INIT = '/etc/init.d/hotspot-data';
@@ -40,6 +45,10 @@ const BEGIN = '/* BEGIN e5-hotspotdata';
 const SETTINGS = '/usr/share/e5-infoscreen/settings.uc';
 const SETTINGS_ANCHOR = 'const system_cat = {';
 const CPU_ANCHOR = 'const cpu_categories = [';
+const INDEX = '/usr/share/e5-infoscreen/www/index.html';
+const INDEX_ANCHOR = '<script src="app.js"></script>\n';
+const HTML_BEGIN = '<!-- BEGIN e5-hotspotdata';
+const HTML_END = '<!-- END e5-hotspotdata -->\n';
 // t551m-sim-status stamps its readings with time.monotonic(), which stops in
 // deep sleep, while the screen and this app compare them with /proc/uptime
 // (boottime): after the first suspend each reading looked older than 15 s and
@@ -58,10 +67,11 @@ return function(ctx) {
 	function count(s, part) { return length(split(s, part)) - 1; }
 
 	// a file without our block
-	function cut(src) {
-		let b = index(src, BEGIN), e = index(src, END);
+	function cut(src, begin, end) {
+		begin = begin ?? BEGIN; end = end ?? END;
+		let b = index(src, begin), e = index(src, end);
 		if (b < 0 || e < b) return null;
-		return substr(src, 0, b) + substr(src, e + length(END));
+		return substr(src, 0, b) + substr(src, e + length(end));
 	}
 
 	// app.js without our block and with the poll line as it came
@@ -82,6 +92,52 @@ return function(ctx) {
 			return false;
 		}
 		return true;
+	}
+
+	// index.html with this version of cores-card.html; the screen restarted when it changed
+	function ensure_index_patch() {
+		let src = readfile(INDEX), want = readfile(`${DIR}/cores-card.html`);
+		if (src == null || want == null) return { patched: false, error: 'missing index.html or cores-card.html' };
+		if (index(src, want) >= 0) return { patched: true };
+		if (index(src, HTML_BEGIN) >= 0) {
+			src = cut(src, HTML_BEGIN, HTML_END);
+			if (src == null) return { patched: false, error: 'cannot remove the older CPU card' };
+		}
+		if (count(src, INDEX_ANCHOR) != 1)
+			return { patched: false, error: 'this screen version has no single app.js script: no CPU card' };
+		let parts = split(src, INDEX_ANCHOR), tmp = INDEX + '.hotspotdata-new';
+		if (writefile(tmp, parts[0] + INDEX_ANCHOR + want + parts[1]) == null || !rename(tmp, INDEX)) {
+			unlink(tmp);
+			return { patched: false, error: 'cannot write index.html' };
+		}
+		ctx.log('index.html patched (the overview\'s CPU card), the screen restarts');
+		restart_screen();
+		return { patched: true, restarting: true };
+	}
+
+	// each core: online, its clock, and who took it offline (the CPU page's
+	// OFF, the hotspot-off core shutdown); /proc/stat's busy and total jiffies
+	// for the load; the governors of the domains
+	function cores() {
+		let held = split(readfile('/var/run/hotspotdata.cores') ?? '', '\n');
+		let page = split(readfile('/var/run/hotspotdata.cpu-off.cpus') ?? '', '\n');
+		let cpus = [], govs = [];
+		for (let d in glob('/sys/devices/system/cpu/cpu[0-9]*')) {
+			let id = +replace(d, /^.*cpu/, ''), on = trim(readfile(`${d}/online`) ?? '1') != '0';
+			let khz = on ? +trim(readfile(`${d}/cpufreq/scaling_cur_freq`) ?? '0') : 0;
+			push(cpus, { id, online: on, mhz: khz / 1000,
+				off: on ? null : index(page, `${id}`) >= 0 ? 'page' : index(held, `${id}`) >= 0 ? 'hotspot' : 'other' });
+		}
+		for (let p in glob('/sys/devices/system/cpu/cpufreq/policy[0-9]*')) {
+			let g = trim(readfile(`${p}/scaling_governor`) ?? '');
+			if (g != '' && index(govs, g) < 0) push(govs, g);
+		}
+		// cpu  user nice system idle iowait irq softirq steal ...
+		let f = map(slice(split(trim(split(readfile('/proc/stat') ?? '', '\n')[0]), /\s+/), 1, 9), x => +x);
+		let total = 0;
+		for (let x in f) total += x;
+		return { cpus: sort(cpus, (a, b) => a.id - b.id), governors: govs,
+			stat: { busy: total - (f[3] ?? 0) - (f[4] ?? 0), total } };
 	}
 
 	// settings.uc with this version of cpu-patch.uc: the CPU page's OFF
@@ -329,7 +385,16 @@ return function(ctx) {
 				st.cpu_patch = { ...ensure_cpu_patch(), mtime };
 				ctx.state_put('cpu_patch', st.cpu_patch);
 			}
+			let card = stat(`${DIR}/cores-card.html`)?.mtime;
+			st.index_patch = ctx.state_get('index_patch', 60);
+			if (st.index_patch == null || st.index_patch.mtime != card) {
+				st.index_patch = { ...ensure_index_patch(), mtime: card };
+				ctx.state_put('index_patch', st.index_patch);
+			}
 			return st;
+		},
+		'GET /cores': function(req) {
+			return cores();
 		},
 		'GET /blank-poll': function(req) {
 			return blank_poll();
@@ -377,6 +442,7 @@ return function(ctx) {
 				ensure_service();
 				ensure_patch();
 				ensure_cpu_patch();
+				ensure_index_patch();
 				ensure_simstat();
 			}
 			return { notifications: [] };
