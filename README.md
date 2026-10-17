@@ -4,7 +4,7 @@
 
 *Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings; USB can be turned off (charge only)*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.9**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v3.0**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -27,7 +27,7 @@ v2.8 起：USB 设置页，以及“USB 角色”的选项，多了“关闭（�
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v2.9.tar.gz`](releases/hotspotdata-v2.9.tar.gz)。
+1. 下载 [`releases/hotspotdata-v3.0.tar.gz`](releases/hotspotdata-v3.0.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -119,6 +119,17 @@ E5 也不会通过 USB 口对外供电。选其他角色（自动识别、设备
 实现：本应用给 `/usr/share/e5-infoscreen/settings.uc` 打第二个补丁（`usb-patch.uc`，独立标记，
 放在“关于”之前），切换经由 `usb-off.sh`；信息屏或镜像更新后一分钟内自动重打。
 
+### 关闭（不充电）（v3.0）
+
+USB 角色里还有一项 **关闭（不充电）**：在“关闭（仅充电）”的基础上连充电也停掉——系统的充电保护
+（`/usr/libexec/e5-charge`，e5-sleep8 起有 `e5-charge.main.block`）把充电芯片保持在 HiZ，
+它不再从 USB 取电，整机由电池供电。适合长期插着线、又不想一直充满的情况。
+
+- 熄屏、关热点、射频关闭时，**插着线也能深度休眠**：需要 e5-sleep8 内核（补丁 0009：USB 数据关闭时，
+  有 VBUS 也允许挂起）；旧内核上挂起会被 USB 驱动拒绝，自动退避重试，不影响其他功能。
+- 只有这个系统的充电保护支持 `block` 时才出现这个选项（e5-sleep8 及以后）。
+- 选其他角色即恢复数据和充电；重启后保持；卸载应用时一并恢复。
+
 ## 深度休眠
 
 OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内核和固件其实支持
@@ -127,7 +138,7 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 - 熄屏达到设定时间；
 - 热点关闭：Wi-Fi 驱动休眠时会停掉 AP，hostapd 不知道，热点会坏；
-- 没插 USB、没充电：USB 驱动有 VBUS 时拒绝休眠；
+- 没插 USB、没充电：USB 驱动有 VBUS 时拒绝休眠；例外是 USB 角色为“关闭（不充电）”（v3.0，需 e5-sleep8 内核）；
 - 蜂窝射频已关闭（或打开了“射频开着时也休眠”）；
 - 没有声音在播放或录音，没有 `/sys/power/wake_lock` 唤醒锁。
 
@@ -168,7 +179,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 ## 版本
 
-- [v2.9](releases/hotspotdata-v2.9.tar.gz)（当前）：深度休眠的唤醒原因能识别电量计的定时校准（约每 2320 秒一次），记为“电量计校准”而不是“未知”
+- [v3.0](releases/hotspotdata-v3.0.tar.gz)（当前）：USB 角色增加“关闭（不充电）”：数据和充电都关（充电芯片 HiZ，由电池供电）；配合 e5-sleep8 内核，插着线熄屏也能深度休眠
+- [v2.9](releases/hotspotdata-v2.9.tar.gz)：深度休眠的唤醒原因能识别电量计的定时校准（约每 2320 秒一次），记为“电量计校准”而不是“未知”
 - [v2.8](releases/hotspotdata-v2.8.tar.gz)：USB 设置的“USB 角色”增加“关闭（仅充电）”，物理上禁用 USB 数据，重启后保持
 - [v2.7](releases/hotspotdata-v2.7.tar.gz)：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；概览页增加 CPU 状态卡片、电流电压后显示功率；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
 - [v2.6](releases/hotspotdata-v2.6.tar.gz)：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”

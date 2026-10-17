@@ -833,8 +833,15 @@ usb_off_clear() {
 	local p
 	sed -i '/^\/\* BEGIN e5-usboff/,/^\/\* END e5-usboff \*\//d' \
 		/usr/share/e5-infoscreen/settings.uc 2>/dev/null
-	[ "$(uci -q get "$CFG.settings.usb_off")" = 1 ] ||
-		[ "$(cat /sys/class/usb_notify/usb_control/usb_data_enabled 2>/dev/null)" = 0 ] || return 0
+	case "$(uci -q get "$CFG.settings.usb_off")" in
+		1|2) ;;
+		*) [ "$(cat /sys/class/usb_notify/usb_control/usb_data_enabled 2>/dev/null)" = 0 ] || return 0 ;;
+	esac
+	# (USB 关闭（不充电）: charging back too)
+	if [ "$(uci -q get e5-charge.main.block)" = 1 ]; then
+		uci set e5-charge.main.block=0 && uci commit e5-charge
+		/etc/init.d/e5-charge restart >/dev/null 2>&1
+	fi
 	echo 1 > /sys/class/usb_notify/usb_control/usb_data_enabled 2>/dev/null
 	for p in /sys/bus/platform/devices/*/usb_role_policy; do
 		[ "$(cat "$p" 2>/dev/null)" = device ] && echo auto > "$p" 2>/dev/null

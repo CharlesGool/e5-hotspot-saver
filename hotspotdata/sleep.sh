@@ -13,7 +13,9 @@
 #   * the hotspot is off: the Wi-Fi driver stops the AP in suspend and hostapd
 #     does not notice, so a suspend with the hotspot up would break it;
 #   * no USB power: the MUSB driver refuses to suspend with VBUS in device mode
-#     (musb_sprd_pm_suspend), and while charging nothing is drawn from the battery;
+#     (musb_sprd_pm_suspend), and while charging nothing is drawn from the battery --
+#     but with USB 关闭（不充电） (usb-off.sh: no USB data, the charger held in HiZ)
+#     nothing uses the port, and e5-sleep8's kernel suspends with VBUS then;
 #   * the cellular radio is off (service.sh's mark), unless sleep_radio_on is
 #     set: with the radio on, the modem wakes the AP every few seconds and the
 #     wake/sleep cycles cost more than staying awake;
@@ -77,6 +79,13 @@ usb_power() {
 	return 1
 }
 
+# USB 关闭（不充电）: USB data off and the charger held off -- plugged in, nothing to stay awake for
+usb_quiet() {
+	local v
+	[ "$(setting usb_off 0)" = 2 ] && [ "$(uci -q get e5-charge.main.block)" = 1 ] &&
+		read -r v < /sys/class/usb_notify/usb_control/usb_data_enabled && [ "$v" = 0 ]
+} 2>/dev/null
+
 ap_up() { iw dev 2>/dev/null | grep -q 'type AP'; }
 
 radio_off() { [ -f /var/run/hotspotdata.radio-off.0 ] || [ -f /var/run/hotspotdata.radio-off.1 ]; }
@@ -130,7 +139,7 @@ reason() {
 	[ "$(setting sleep 1)" = 0 ] && { echo disabled; return; }
 	screen_lit && { echo screen; return; }
 	[ $(($(uptime_s) - dark_since)) -lt "$(num "$(setting sleep_delay 30)" 30)" ] && { echo delay; return; }
-	usb_power && { echo power; return; }
+	usb_power && ! usb_quiet && { echo power; return; }
 	ap_up && { echo hotspot; return; }
 	[ "$(setting sleep_radio_on 0)" = 1 ] || radio_off || { echo radio; return; }
 	audio_busy && { echo audio; return; }
