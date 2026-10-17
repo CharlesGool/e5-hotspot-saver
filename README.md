@@ -4,7 +4,7 @@
 
 *Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings; USB can be turned off (charge only)*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.8**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.9**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -27,7 +27,7 @@ v2.8 起：USB 设置页，以及“USB 角色”的选项，多了“关闭（�
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v2.8.tar.gz`](releases/hotspotdata-v2.8.tar.gz)。
+1. 下载 [`releases/hotspotdata-v2.9.tar.gz`](releases/hotspotdata-v2.9.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -133,6 +133,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 连续 3 次睡不到 10 秒会暂缓休眠（60 秒起，加倍，最多 10 分钟）。
 
+不碰它时，系统约每 2320 秒被电量计唤醒一次：电量计（UMP9620 FGU）的休眠校准在电流低于 30 mA 时每 4 秒计一次数，数满设备树里的 580 次就唤醒系统读开路电压、校正电量，醒几秒又睡回去。日志和页面上记为“电量计校准”（`fgu`）。要拉长这个间隔需要改内核模块（电量计模块由启动镜像的 initramfs 加载），见深度休眠内核的刷机包。
+
 实测（关热点、射频关、熄屏、拔线）：152.9 秒里睡了 148.6 秒（97%）；电源键唤醒并点亮屏幕。
 射频和数据开着时只睡 17.6%，平均 147 mA，比不睡（74 mA）更费电，所以默认只在射频关闭后休眠。
 
@@ -166,7 +168,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 ## 版本
 
-- [v2.8](releases/hotspotdata-v2.8.tar.gz)（当前）：USB 设置的“USB 角色”增加“关闭（仅充电）”，物理上禁用 USB 数据，重启后保持
+- [v2.9](releases/hotspotdata-v2.9.tar.gz)（当前）：深度休眠的唤醒原因能识别电量计的定时校准（约每 2320 秒一次），记为“电量计校准”而不是“未知”
+- [v2.8](releases/hotspotdata-v2.8.tar.gz)：USB 设置的“USB 角色”增加“关闭（仅充电）”，物理上禁用 USB 数据，重启后保持
 - [v2.7](releases/hotspotdata-v2.7.tar.gz)：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；概览页增加 CPU 状态卡片、电流电压后显示功率；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
 - [v2.6](releases/hotspotdata-v2.6.tar.gz)：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”
 - [v2.5](releases/hotspotdata-v2.5.tar.gz)：关热点后深度休眠；修复休眠后信号显示“状态未知”

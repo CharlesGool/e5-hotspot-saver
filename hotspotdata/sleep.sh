@@ -26,7 +26,9 @@
 # board.  So procd closes it with the magic character (which stops it) just
 # before each suspend and opens it again right after.
 #
-# A key (gpio-keys), the charger, the modem, the RTC alarm (sleep_wake_every) wake it.
+# A key (gpio-keys), the charger, the modem, the RTC alarm (sleep_wake_every) wake it,
+# and the fuel gauge: its sleep calibration (the relax counter, 4 s a count under
+# 30 mA; the device tree's 580 counts are 2320 s) wakes it to read the OCV.
 # Settings: e5-plugin-hotspotdata.settings.sleep*, state in /var/run/hotspotdata.sleep/.
 # A removed app: service.sh removes the init script; this only gives the watchdog back.
 
@@ -106,12 +108,14 @@ irqsnap() {
 woke_by() {
 	local names
 	names=$(awk 'NR == FNR { p[$1] = $2; next } $2 > p[$1] { print $1 }' "$RUN/ws.prev" "$RUN/ws.now"
-		awk 'NR == FNR { p[$1] = $2; next } $2 > p[$1] && $3 ~ /Key|keypad|extcon|typec|rtc|mailbox|sdiohal|pub_int/ { print $3 }' \
+		awk 'NR == FNR { p[$1] = $2; next } $2 > p[$1] && $3 ~ /Key|keypad|extcon|typec|rtc|fgu|mailbox|sdiohal|pub_int/ { print $3 }' \
 			"$RUN/irq.prev" "$RUN/irq.now")
 	names=$(echo $names)
 	case "$names" in
 		*gpio-keys*|*keypad*|*Power_Key*|*Volume*|*voice_Key*) echo key ;;
 		*charger*|*vchg*|*aw322*|*usb*|*musb*|*typec*|*extcon*) echo power ;;
+		# (before the modem: its mailbox fires at every resume)
+		*fgu*) echo fgu ;;
 		*rtc*) echo rtc ;;
 		*sipc*|*smsg*|*sipa*|*modem*|*sbuf*|*mailbox*) echo modem ;;
 		*sdiohal*|*pub_int*|*Wi-Fi*|*BT_*|*wcn*) echo wcn ;;
