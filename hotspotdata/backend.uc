@@ -26,6 +26,8 @@
 // and every change there goes through cpu-off.sh.  api.uc loads settings.uc
 // for every request, so no restart; a patched file that does not compile is
 // not written.  An image update brings it unpatched: patched again the same way.
+// A second block of its own (usb-patch.uc, before about: usb_cat comes after
+// system_cat) gives the USB page's role 关闭（仅充电）, through usb-off.sh.
 //
 // And index.html (cores-card.html, after app.js): the overview's CPU card,
 // which asks GET /cores.  The screen restarts when that changes.
@@ -45,6 +47,11 @@ const BEGIN = '/* BEGIN e5-hotspotdata';
 const SETTINGS = '/usr/share/e5-infoscreen/settings.uc';
 const SETTINGS_ANCHOR = 'const system_cat = {';
 const CPU_ANCHOR = 'const cpu_categories = [';
+const USB_BEGIN = '/* BEGIN e5-usboff';
+const USB_END = '/* END e5-usboff */
+';
+const USB_ANCHOR = 'const about = {';
+const USB_CAT = 'const usb_cat = {';
 const INDEX = '/usr/share/e5-infoscreen/www/index.html';
 const INDEX_ANCHOR = '<script src="app.js"></script>\n';
 const HTML_BEGIN = '<!-- BEGIN e5-hotspotdata';
@@ -163,6 +170,32 @@ return function(ctx) {
 			return { patched: false, error: 'cannot patch settings.uc' };
 		}
 		ctx.log('settings.uc patched (CPU page: OFF)');
+		return { patched: true };
+	}
+
+	// settings.uc with this version of usb-patch.uc: the USB role 关闭（仅充电）
+	function ensure_usb_patch() {
+		let src = readfile(SETTINGS), want = readfile(`${DIR}/usb-patch.uc`);
+		if (src == null || want == null) return { patched: false, error: 'missing settings.uc or usb-patch.uc' };
+		if (index(src, want) >= 0) return { patched: true };
+		if (index(src, USB_BEGIN) >= 0) {
+			src = cut(src, USB_BEGIN, USB_END);
+			if (src == null) return { patched: false, error: 'cannot remove the older USB page patch' };
+		}
+		if (count(src, USB_ANCHOR) != 1 || count(src, USB_CAT) != 1)
+			return { patched: false, error: 'this screen version has no USB page to patch' };
+		let parts = split(src, USB_ANCHOR);
+		src = parts[0] + want + USB_ANCHOR + parts[1];
+		// (only a file that compiles, as for the CPU page)
+		let tmp = SETTINGS + '.hotspotdata-new';
+		let ok = writefile(tmp, src) != null;
+		if (ok)
+			try { loadfile(tmp, { raw_mode: true }); } catch (e) { ok = false; ctx.log(`settings.uc USB patch: ${e}`); }
+		if (!ok || !rename(tmp, SETTINGS)) {
+			unlink(tmp);
+			return { patched: false, error: 'cannot patch settings.uc' };
+		}
+		ctx.log('settings.uc patched (USB page: off)');
 		return { patched: true };
 	}
 
@@ -385,6 +418,12 @@ return function(ctx) {
 				st.cpu_patch = { ...ensure_cpu_patch(), mtime };
 				ctx.state_put('cpu_patch', st.cpu_patch);
 			}
+			let usb = stat(`${DIR}/usb-patch.uc`)?.mtime;
+			st.usb_patch = ctx.state_get('usb_patch', 60);
+			if (st.usb_patch == null || st.usb_patch.mtime != usb) {
+				st.usb_patch = { ...ensure_usb_patch(), mtime: usb };
+				ctx.state_put('usb_patch', st.usb_patch);
+			}
 			let card = stat(`${DIR}/cores-card.html`)?.mtime;
 			st.index_patch = ctx.state_get('index_patch', 60);
 			if (st.index_patch == null || st.index_patch.mtime != card) {
@@ -442,6 +481,7 @@ return function(ctx) {
 				ensure_service();
 				ensure_patch();
 				ensure_cpu_patch();
+				ensure_usb_patch();
 				ensure_index_patch();
 				ensure_simstat();
 			}

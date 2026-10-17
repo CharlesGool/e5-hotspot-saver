@@ -1,10 +1,10 @@
 # 热点省电 · Hotspot Power Saver
 
-关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复；CPU 设置可关闭核心（OFF）
+关热点时关射频、降频、关核心、关蓝牙，熄屏后深度休眠，开热点恢复；CPU 设置可关闭核心（OFF）；USB 可关闭（仅充电）
 
-*Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings*
+*Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings; USB can be turned off (charge only)*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.7**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v2.8**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -18,7 +18,7 @@
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v2.7.tar.gz`](releases/hotspotdata-v2.7.tar.gz)。
+1. 下载 [`releases/hotspotdata-v2.8.tar.gz`](releases/hotspotdata-v2.8.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -91,6 +91,23 @@
 实现：本应用给 `/usr/share/e5-infoscreen/www/index.html` 注入卡片脚本（`cores-card.html`，放在
 `app.js` 之后，内容变化时屏幕重启一次）；卸载应用后卡片自动消失。
 
+## USB 关闭（仅充电）
+
+USB 设置（屏幕：设置 → 高级 → USB → USB 角色）多了一项 **关闭（仅充电）**：USB 接口只用来充电，
+数据完全关闭——插电脑看不到设备、USB 网络和 SSH 断开，插 U 盘、网卡等 USB 设备也不会被识别，
+E5 也不会通过 USB 口对外供电。选其他角色（自动识别、设备模式、主机 · OTG）即恢复。
+
+- 用的是内核已有的两个开关：Type-C 口固定为受电方（`usb_role_policy` = `device`），
+  USB 控制器的数据开关关闭（`/sys/class/usb_notify/usb_control/usb_data_enabled` = 0，原厂“禁用 USB 数据”）。
+  充电走 VBUS 和充电芯片自己的检测，不受影响。
+- 重启后保持关闭（`e5-plugin-hotspotdata.settings.usb_off`，系统 USB 角色设置之后由本应用的服务再次关闭），
+  刷机升级保留设置时也保留。
+- 关闭时屏幕的“当前角色”显示“关闭（仅充电）”；USB 网络断开后仍可通过热点（Wi-Fi）访问 LuCI / SSH。
+- 卸载应用会重新打开 USB 并去掉补丁。
+
+实现：本应用给 `/usr/share/e5-infoscreen/settings.uc` 打第二个补丁（`usb-patch.uc`，独立标记，
+放在“关于”之前），切换经由 `usb-off.sh`；信息屏或镜像更新后一分钟内自动重打。
+
 ## 深度休眠
 
 OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内核和固件其实支持
@@ -133,10 +150,13 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 - [`poll-patch.js`](hotspotdata/poll-patch.js)
 - [`service.sh`](hotspotdata/service.sh)
 - [`sleep.sh`](hotspotdata/sleep.sh)
+- [`usb-off.sh`](hotspotdata/usb-off.sh)
+- [`usb-patch.uc`](hotspotdata/usb-patch.uc)
 
 ## 版本
 
-- [v2.7](releases/hotspotdata-v2.7.tar.gz)（当前）：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；概览页增加 CPU 状态卡片、电流电压后显示功率；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
+- [v2.8](releases/hotspotdata-v2.8.tar.gz)（当前）：USB 设置的“USB 角色”增加“关闭（仅充电）”，物理上禁用 USB 数据，重启后保持
+- [v2.7](releases/hotspotdata-v2.7.tar.gz)：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；概览页增加 CPU 状态卡片、电流电压后显示功率；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
 - [v2.6](releases/hotspotdata-v2.6.tar.gz)：深度休眠的唤醒原因也看中断计数，按键唤醒不再显示“未知唤醒”
 - [v2.5](releases/hotspotdata-v2.5.tar.gz)：关热点后深度休眠；修复休眠后信号显示“状态未知”
 - [v2.3](releases/hotspotdata-v2.3.tar.gz)

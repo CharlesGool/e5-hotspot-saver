@@ -827,9 +827,27 @@ give_back() {
 	[ "$(uci -q get "network.$(data_iface).auto")" = 0 ] && data_on
 }
 
+# the app is gone: USB 关闭（usb-off.sh) given back -- data on, the port
+# automatic -- and the USB page's patch out
+usb_off_clear() {
+	local p
+	sed -i '/^\/\* BEGIN e5-usboff/,/^\/\* END e5-usboff \*\//d' \
+		/usr/share/e5-infoscreen/settings.uc 2>/dev/null
+	[ "$(uci -q get "$CFG.settings.usb_off")" = 1 ] ||
+		[ "$(cat /sys/class/usb_notify/usb_control/usb_data_enabled 2>/dev/null)" = 0 ] || return 0
+	echo 1 > /sys/class/usb_notify/usb_control/usb_data_enabled 2>/dev/null
+	for p in /sys/bus/platform/devices/*/usb_role_policy; do
+		[ "$(cat "$p" 2>/dev/null)" = device ] && echo auto > "$p" 2>/dev/null
+	done
+	uci -q delete "$CFG.settings.usb_off" && uci commit "$CFG"
+	/etc/init.d/e5-usb-watch start >/dev/null 2>&1
+	log "USB off given back: USB on again"
+}
+
 # the app is gone: data back to normal, and this service with it
 remove_self() {
 	cpu_off_clear
+	usb_off_clear
 	give_back
 	log "app removed: mobile data restored, service removed"
 	"$INIT" disable 2>/dev/null
@@ -869,6 +887,9 @@ if [ -f "$CPUOFF_SAVED" ] && [ ! -f "$CPUOFF_LIST" ] && [ -f "$CPUOFF" ]; then
 		rm -f "$CPUOFF_SAVED"
 	fi
 fi
+# USB 关闭 (usb-off.sh, the USB page) kept: off again at boot -- after the
+# system's own USB role (unisoc-modem-ui starts before this service)
+[ -f "$DIR/usb-off.sh" ] && sh "$DIR/usb-off.sh" apply
 dark_since=
 boost=0
 
