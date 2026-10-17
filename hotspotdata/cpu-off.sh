@@ -222,6 +222,62 @@ perf_pending() {
 	if [ -s "$PERF_PENDING.new" ]; then mv -f "$PERF_PENDING.new" "$PERF_PENDING"; else rm -f "$PERF_PENDING.new" "$PERF_PENDING"; fi
 }
 
+# While service.sh holds the clocks low (PERF: "path old ours"), cpu-control
+# gets the real limits for the call -- it reads them, and saves them in the
+# boot profile -- and they are held again after it: a limit the call changed
+# is what the hotspot's restore gives back.
+perf_unhold() {
+	local path old ours
+	[ -f "$PERF" ] || return 0
+	while read -r path old ours; do
+		[ -n "$old" ] && [ -n "$ours" ] || continue
+		[ "$(limit_now "$R$path" 2>/dev/null)" = "$ours" ] && echo "$old" > "$R$path" 2>/dev/null
+	done < "$PERF"
+}
+perf_rehold() {
+	local path old ours now
+	[ -f "$PERF" ] || return 0
+	: > "$PERF.new"
+	while read -r path old ours; do
+		now=$(limit_now "$R$path" 2>/dev/null)
+		[ -n "$now" ] && [ -n "$ours" ] && old=$now
+		echo "$path $old $ours" >> "$PERF.new"
+		[ -n "$ours" ] && echo "$ours" > "$R$path" 2>/dev/null
+	done < "$PERF"
+	mv -f "$PERF.new" "$PERF"
+}
+
+# While they are held, a domain online again (not held: it had no core online
+# when they were) is held with them -- into PERF with what it is to get back,
+# its PERF_PENDING limits or else its own, and at its lowest.
+perf_join() {
+	local p d path lo name line old
+	[ -f "$PERF" ] || return 0
+	for p in $(policies); do
+		d=$CPUSYS/cpufreq/$p
+		[ -n "$(cat "$d/affected_cpus" 2>/dev/null)" ] || continue
+		path=${d#$R}
+		grep -q "^$path/scaling_max_freq " "$PERF" && continue
+		lo=$(tr ' ' '\n' < "$d/scaling_available_frequencies" 2>/dev/null | grep -E '^[0-9]+$' | sort -n | head -n 1)
+		[ -n "$lo" ] || lo=$(cat "$d/cpuinfo_min_freq" 2>/dev/null)
+		[ -n "$lo" ] || continue
+		for name in scaling_max_freq scaling_min_freq; do
+			line=$(grep "^$path/$name " "$PERF_PENDING" 2>/dev/null | head -n 1)
+			old=$(echo "$line" | cut -d' ' -f2)
+			[ -n "$old" ] || old=$(limit_now "$d/$name")
+			echo "$path/$name $old $lo" >> "$PERF"
+			if [ -n "$line" ]; then
+				grep -v "^$path/$name " "$PERF_PENDING" > "$PERF_PENDING.new"
+				mv -f "$PERF_PENDING.new" "$PERF_PENDING"
+				[ -s "$PERF_PENDING" ] || rm -f "$PERF_PENDING"
+			fi
+		done
+		echo "$lo" > "$d/scaling_min_freq" 2>/dev/null
+		echo "$lo" > "$d/scaling_max_freq" 2>/dev/null
+		log "CPU page: $p online while the clocks are held low: held with them"
+	done
+}
+
 # a cpu-control reply with every domain whole, as FULL
 full_save() {
 	case "$1" in *'"policies"'*) ;; *) return ;; esac
@@ -323,11 +379,13 @@ do_set() {
 	# every core online for cpu-control
 	for c in $was; do cpu_set_online "$c" 1; done
 	perf_pending
+	perf_unhold
 	if [ -n "$row" ]; then
 		reply=$("$CTL" get 2>/dev/null)
 	else
 		reply=$("$CTL" set "$req" 2>/dev/null)
 	fi
+	perf_rehold
 	full_save "$reply"
 	# offline again: those that were -- but those no longer off by the CPU
 	# page only where the hotspot-off core shutdown holds them; and every core
@@ -339,6 +397,7 @@ do_set() {
 		cpu_set_online "$c" 0
 	done
 	hold
+	perf_join
 	save_sync
 	if [ -n "$reply" ]; then
 		printf '%s\n' "$reply"
