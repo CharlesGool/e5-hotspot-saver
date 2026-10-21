@@ -4,7 +4,7 @@
 
 *Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings; USB can be turned off (charge only)*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v3.0**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v3.1**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -27,7 +27,7 @@ v2.8 起：USB 设置页，以及“USB 角色”的选项，多了“关闭（�
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v3.0.tar.gz`](releases/hotspotdata-v3.0.tar.gz)。
+1. 下载 [`releases/hotspotdata-v3.1.tar.gz`](releases/hotspotdata-v3.1.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -139,7 +139,9 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 - 熄屏达到设定时间；
 - 热点关闭：Wi-Fi 驱动休眠时会停掉 AP，hostapd 不知道，热点会坏；
 - 没插 USB、没充电：USB 驱动有 VBUS 时拒绝休眠；例外是 USB 角色为“关闭（不充电）”（v3.0，需 e5-sleep8 内核）；
-- 蜂窝射频已关闭（或打开了“射频开着时也休眠”）；
+- 蜂窝射频已关闭（或打开了“射频开着时也休眠”）；两个卡槽都没插 SIM 卡也算（v3.1：没卡时射频是 CFUN 0，以前不认）；
+- 系统不在 SD 卡上（v3.1）：SD 卡安装从深度休眠唤醒不了、只能强制重启，修好之前不休眠，状态显示“系统在 SD 卡上，暂不支持”；
+  测试时可设 `uci set e5-plugin-hotspotdata.settings.sleep_sd=1` 强制允许；
 - 没有声音在播放或录音，没有 `/sys/power/wake_lock` 唤醒锁。
 
 连续 3 次睡不到 10 秒会暂缓休眠（60 秒起，加倍，最多 10 分钟）。
@@ -179,7 +181,8 @@ OpenWrt 从不让内核休眠：熄屏只是背光为 0，SoC 一直醒着。内
 
 ## 版本
 
-- [v3.0](releases/hotspotdata-v3.0.tar.gz)（当前）：USB 角色增加“关闭（不充电）”：数据和充电都关（充电芯片 HiZ，由电池供电）；配合 e5-sleep8 内核，插着线熄屏也能深度休眠
+- [v3.1](releases/hotspotdata-v3.1.tar.gz)（当前）：没插 SIM 卡时也能深度休眠（没卡时射频状态是 CFUN 0，以前不认，一直当作射频开着）；系统装在 SD 卡上时暂不深度休眠（唤醒不了，会睡死）
+- [v3.0](releases/hotspotdata-v3.0.tar.gz)：USB 角色增加“关闭（不充电）”：数据和充电都关（充电芯片 HiZ，由电池供电）；配合 e5-sleep8 内核，插着线熄屏也能深度休眠
 - [v2.9](releases/hotspotdata-v2.9.tar.gz)：深度休眠的唤醒原因能识别电量计的定时校准（约每 2320 秒一次），记为“电量计校准”而不是“未知”
 - [v2.8](releases/hotspotdata-v2.8.tar.gz)：USB 设置的“USB 角色”增加“关闭（仅充电）”，物理上禁用 USB 数据，重启后保持
 - [v2.7](releases/hotspotdata-v2.7.tar.gz)：系统 CPU 设置的调速器下增加“关闭核心”（大核 OFF，小核簇保留 1/2/4 个）；概览页增加 CPU 状态卡片、电流电压后显示功率；修复核心离线时 CPU 设置页显示空白、保存开机配置会在下次开机被拒绝
