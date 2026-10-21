@@ -138,6 +138,16 @@ cfun_set() {
 	MU300_SIM_SLOT=$1 "$AT" -t 15 "AT+CFUN=$2" 2>/dev/null | grep -q '^OK'
 }
 
+# no SIM in the card: the SIM status poller's reading (sims[] is slot 0, 1),
+# or AT+CPIN? when it has none ("SIM NOT INSERTED", +CME ERROR: 10)
+sim_absent() {
+	local v
+	v=$(jsonfilter -i "$SIMS" -e "@.sims[$1].present" 2>/dev/null)
+	[ "$v" = false ] && return 0
+	[ "$v" = true ] && return 1
+	MU300_SIM_SLOT=$1 "$AT" -t 10 'AT+CPIN?' 2>/dev/null | grep -q -E 'NOT INSERTED|CME ERROR: *10'
+}
+
 pause_wanted() { [ "$(uci -q get "$CFG.settings.pause_sim_status")" != 0 ]; }
 
 # (also when something started it again while paused)
@@ -766,16 +776,19 @@ radio_apply() {
 		return
 	fi
 	radio_done=radio
+	c=$(data_card)
 	s=$(modem_state)
 	case "$s" in
 		# Never touch the radio while ModemManager has no modem or is still
 		# probing it: the radio going off under its probe can make it give
 		# the device up for good (at boot, with the hotspot off) -- "无模组".
-		''|disabling|enabling|initializing) return ;;
+		# Without a SIM there is nothing to lose (no data, no SMS), and
+		# ModemManager may never get past that: the radio goes off anyway,
+		# or the night is spent awake with the radio searching.
+		''|disabling|enabling|initializing) sim_absent "$c" || return ;;
 		disabled|failed|locked) ;;
 		*) mmcli -m any --timeout=30 --disable >/dev/null 2>&1 ;;
 	esac
-	c=$(data_card)
 	case "$(cfun_get "$c")" in
 		1)
 			: > "$MARK.$c"

@@ -88,7 +88,26 @@ usb_quiet() {
 
 ap_up() { iw dev 2>/dev/null | grep -q 'type AP'; }
 
-radio_off() { [ -f /var/run/hotspotdata.radio-off.0 ] || [ -f /var/run/hotspotdata.radio-off.1 ]; }
+# the radio off (service.sh's mark), or no SIM in either slot: nothing to
+# register with, nothing to page us (the SIM status poller's reading)
+radio_off() {
+	[ -f /var/run/hotspotdata.radio-off.0 ] || [ -f /var/run/hotspotdata.radio-off.1 ] && return 0
+	[ "$(jsonfilter -i /run/t551m-sims.json -e '@.sims[0].present' 2>/dev/null)" = false ] &&
+		[ "$(jsonfilter -i /run/t551m-sims.json -e '@.sims[1].present' 2>/dev/null)" = false ]
+}
+
+# the root file system on the SD card (flash.py's default install): the card
+# does not come back from a suspend and the system hangs.  No deep sleep there
+# until that is fixed, unless sleep_sd is set (for testing).
+sd_root() {
+	local d
+	[ -f /etc/e5/sd-root ] && return 0
+	d=$(awk '$2 == "/" { d = $1 } END { print d }' /proc/mounts)
+	d=${d#/dev/}
+	case "$d" in mmcblk*p*) d=${d%p*} ;; *) return 1 ;; esac
+	case "$(readlink -f "/sys/block/$d" 2>/dev/null)" in *22210000*) return 0 ;; esac
+	return 1
+}
 
 audio_busy() { cat /proc/asound/card*/pcm*/sub*/status 2>/dev/null | grep -q 'RUNNING'; }
 
@@ -137,6 +156,7 @@ woke_by() {
 # why the system has to stay awake now, or nothing when it may sleep
 reason() {
 	[ "$(setting sleep 1)" = 0 ] && { echo disabled; return; }
+	[ "$sdcard" = 1 ] && { echo sdcard; return; }
 	screen_lit && { echo screen; return; }
 	[ $(($(uptime_s) - dark_since)) -lt "$(num "$(setting sleep_delay 30)" 30)" ] && { echo delay; return; }
 	usb_power && ! usb_quiet && { echo power; return; }
@@ -244,8 +264,11 @@ attempts=0; sleeps=0; fails=0; slept=0
 last_at=0; last_slept=0; last_by=
 short=0; backoff=$BACKOFF_MIN; backoff_until=0
 dark_since=$(uptime_s)
+sdcard=0
+sd_root && [ "$(setting sleep_sd 0)" != 1 ] && sdcard=1
 put_stats
 log "started (delay $(setting sleep_delay 30)s, radio_on $(setting sleep_radio_on 0))"
+[ "$sdcard" = 1 ] && log "the system is on the SD card: no deep sleep (it does not wake up from it)"
 
 while :; do
 	[ -f "$DIR/manifest.json" ] || remove_self

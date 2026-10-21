@@ -346,7 +346,7 @@ return function(ctx) {
 			deep: index(readfile('/sys/power/mem_sleep') ?? '', 'deep') >= 0,
 			delay: +setting('sleep_delay', '30'),
 			radio_on: setting('sleep_radio_on', '0') == '1',
-			// "asleep", or "awake" and why: screen delay power hotspot radio audio wakelock backoff grace kernel disabled
+			// "asleep", or "awake" and why: screen delay power hotspot radio audio wakelock backoff grace kernel disabled sdcard
 			state: st[0] || null,
 			why: st[1] || null,
 			sleeps: s.sleeps ?? 0,
