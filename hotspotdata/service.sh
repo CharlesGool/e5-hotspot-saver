@@ -566,7 +566,14 @@ idle_minutes() {
 }
 
 wifi_clients() {
-	local o n=0 c
+	local o n=0 c f=/tmp/run/e5-infoscreen/api/wifi-stations.json
+	# (v3.3) get_clients asks the Wi-Fi driver about every station, on the chip's
+	# command channel; the screen's list of them (e5-sleep11's api.uc), when it is
+	# fresh, says as much
+	if [ -f "$f" ] && [ $(($(date +%s) - $(date -r "$f" +%s))) -le "$IDLE_CHECK" ]; then
+		grep -o '"[0-9a-f][0-9a-f]\(:[0-9a-f][0-9a-f]\)\{5\}"' "$f" | wc -l
+		return
+	fi
 	for o in $(ubus list 'hostapd.*' 2>/dev/null); do
 		c=$(ubus call "$o" get_clients 2>/dev/null | grep -c '"assoc": *true')
 		n=$((n + ${c:-0}))
@@ -582,7 +589,7 @@ idle_check() {
 	idle_next=$((NOW + IDLE_CHECK))
 	mins=$(idle_minutes)
 	[ "$mins" -gt 0 ] || { idle_since=$NOW; return; }
-	if [ "$(wifi_clients)" -gt 0 ] || usb_in_use; then
+	if usb_in_use || [ "$(wifi_clients)" -gt 0 ]; then
 		idle_since=$NOW
 		return
 	fi
