@@ -722,6 +722,50 @@ watch_on() {
 	lost_since=0
 }
 
+# The Wi-Fi chip (SC2355/Marlin3, SDIO) can assert under hotspot traffic -- a
+# command timeout, "fw assert: CMD_GET_STATION, CMD_RSP_TIMEOUT_ERROR".  The
+# kernel resets the chip and reports the assert for user space to restart Wi-Fi
+# (Android's service does); nothing on OpenWrt does, so the driver stays dead
+# ("can not get msg: hif->exit", the transmit queue timing out every 2 s) with
+# the hotspot still "up" and no beacon on the air.  While the hotspot is on,
+# every WIFI_CHECK s: the AP interface's tx_timeout count rising, or hif->exit in
+# the log's last lines, twice in a row -> the driver reloaded (wifi down, the
+# module out and in, wifi up), at most once in WIFI_GAP s.
+WIFI_CHECK=30
+WIFI_GAP=600
+WIFI_MOD=sprd_wlan_combo
+wifi_ap_if() { iw dev 2>/dev/null | awk '/Interface/ { i = $2 } /type AP/ { print i; exit }'; }
+
+wifi_watch() {
+	local now ifn t bad=0
+	now=$(uptime_s)
+	[ "$now" -ge "$wifi_next" ] || return
+	wifi_next=$((now + WIFI_CHECK))
+	ifn=$(wifi_ap_if)
+	[ -n "$ifn" ] || { wifi_bad=0; return; }
+	t=$(cat "/sys/class/net/$ifn/queues/tx-0/tx_timeout" 2>/dev/null)
+	case "$t" in ''|*[!0-9]*) t=0 ;; esac
+	if [ "$ifn" = "$wifi_if" ] && [ "$t" -gt "$wifi_to" ]; then bad=1; fi
+	# (only lines after our last reload: a quiet log keeps old ones for long)
+	logread -l 100 2>/dev/null | awk '/hotspotdata: Wi-Fi driver reloaded/ { f = 0; next } /hif->exit/ { f = 1 }
+		END { exit !f }' && bad=1
+	wifi_if=$ifn; wifi_to=$t
+	if [ "$bad" = 0 ]; then wifi_bad=0; return; fi
+	wifi_bad=$((wifi_bad + 1))
+	[ "$wifi_bad" -ge 2 ] || return
+	[ $((now - wifi_fixed_at)) -ge "$WIFI_GAP" ] || return
+	wifi_fixed_at=$now; wifi_bad=0; wifi_if=
+	log "Wi-Fi stalled ($ifn: tx_timeout $t; the chip was reset and the driver left dead): reloading $WIFI_MOD"
+	wifi down
+	sleep 2
+	rmmod "$WIFI_MOD" 2>/dev/null
+	sleep 1
+	modprobe "$WIFI_MOD" || log "modprobe $WIFI_MOD failed"
+	sleep 3
+	wifi up
+	log "Wi-Fi driver reloaded, hotspot restarting"
+}
+
 # disable_modem 0 for mode data, set by us and marked so (managed_dm); given
 # back -- deleted, the proto's default 1 -- for mode radio and when we let go
 set_keep_radio() {
@@ -919,6 +963,11 @@ radio_done=
 radio_next=0
 radio_gap=$RADIO_RETRY
 watch_next=0
+wifi_next=0
+wifi_if=
+wifi_to=0
+wifi_bad=0
+wifi_fixed_at=-100000
 lost_since=0
 recovered_at=-100000
 offed=0
@@ -962,6 +1011,7 @@ full_pass() {
 				idle_next=$((NOW + IDLE_CHECK))
 			fi
 			watch_on
+			wifi_watch
 			idle_check
 		else
 			if [ "$state" != off ]; then
