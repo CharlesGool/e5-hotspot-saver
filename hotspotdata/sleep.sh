@@ -119,6 +119,18 @@ wdt_off() {
 }
 wdt_on() { ubus call system watchdog '{"stop": false}' >/dev/null 2>&1; }
 
+# (v3.4) With the screen cut off by volume − (volkeys) only volume + is to wake a
+# deep sleep: volkeys 1.6 masks the other keys for the suspend only (keywake.sh
+# suspend / resume), and leaves them alone while the system is awake -- with the
+# hotspot on, the side key still switches it.  (Older volkeys masked them for
+# the whole cut and know neither command: nothing changes with those.)
+keywake() {
+	local f
+	for f in /usr/share/e5-infoscreen/www/plugins/volkeys/keywake.sh /etc/e5-infoscreen/plugins/volkeys/keywake.sh; do
+		[ -f "$f" ] && { sh "$f" "$1" >/dev/null 2>&1; return 0; }
+	done
+}
+
 # name -> wakeup_count (column 4: the events that ended a suspend)
 wsnap() { awk 'NR > 1 { print $1, $4 }' "$WS" 2>/dev/null; }
 
@@ -207,6 +219,7 @@ suspend_once() {
 	wsnap > "$RUN/ws.prev"
 	irqsnap > "$RUN/irq.prev"
 	put_state "asleep"
+	keywake suspend
 	wdt_off
 	t0=$(boot_f); m0=$(mono_f)
 	if echo "$cnt" > /sys/power/wakeup_count 2>/dev/null; then
@@ -215,6 +228,7 @@ suspend_once() {
 		rc=busy
 	fi
 	wdt_on
+	keywake resume
 	t1=$(boot_f); m1=$(mono_f)
 	wsnap > "$RUN/ws.now"
 	irqsnap > "$RUN/irq.now"
@@ -257,7 +271,7 @@ grep -q debugfs /proc/mounts || mount -t debugfs debugfs /sys/kernel/debug 2>/de
 cp "$DIR/sleep.sh" "$RUN/running" 2>/dev/null
 # (a service killed between the two last time left procd's watchdog stopped)
 wdt_on
-trap 'wdt_on; put_state stopped; exit 0' TERM INT HUP
+trap 'wdt_on; keywake resume; put_state stopped; exit 0' TERM INT HUP
 
 since=$(date +%s)
 attempts=0; sleeps=0; fails=0; slept=0

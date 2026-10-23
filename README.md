@@ -4,7 +4,7 @@
 
 *Radio, CPU and Bluetooth off while the hotspot is off, and deep sleep with the screen dark; OFF for CPU cores in CPU settings; USB can be turned off (charge only)*
 
-容悦 E5（OpenWrt）信息屏应用。当前版本 **v3.3**，应用 ID `hotspotdata`。
+容悦 E5（OpenWrt）信息屏应用。当前版本 **v3.4**，应用 ID `hotspotdata`。
 
 ## 截图
 
@@ -27,7 +27,7 @@ v2.8 起：USB 设置页，以及“USB 角色”的选项，多了“关闭（�
 
 ## 安装
 
-1. 下载 [`releases/hotspotdata-v3.3.tar.gz`](releases/hotspotdata-v3.3.tar.gz)。
+1. 下载 [`releases/hotspotdata-v3.4.tar.gz`](releases/hotspotdata-v3.4.tar.gz)。
 2. 在信息屏的「应用管理」中安装（LuCI：服务 → 信息屏应用 → 应用管理）。
 3. 安装后文件位于设备上的 `/etc/e5-infoscreen/plugins/hotspotdata/`。
 
@@ -187,7 +187,8 @@ Wi-Fi 芯片（SC2355 / Marlin3，SDIO）在热点有流量时偶尔会固件断
 
 ## 版本
 
-- [v3.3](releases/hotspotdata-v3.3.tar.gz)（当前）：“无设备自动关热点”的检查少向 Wi-Fi 芯片查询：先看 USB，再用信息屏缓存的已连接设备（e5-sleep11 起），没有缓存时才问 hostapd；查询越少，芯片固件越不容易卡住
+- [v3.4](releases/hotspotdata-v3.4.tar.gz)（当前）：音量 − 关屏后进入深度休眠时，让音量键功能屏蔽除音量 + 以外的按键，醒来即解除（配合音量键 1.6：没在深度休眠时按键照常，比如热点开着时长按侧键仍能开关热点）
+- [v3.3](releases/hotspotdata-v3.3.tar.gz)：“无设备自动关热点”的检查少向 Wi-Fi 芯片查询：先看 USB，再用信息屏缓存的已连接设备（e5-sleep11 起），没有缓存时才问 hostapd；查询越少，芯片固件越不容易卡住
 - [v3.2](releases/hotspotdata-v3.2.tar.gz)：Wi-Fi 芯片崩溃复位后自动重新加载驱动，热点约 1 分钟内自己恢复（以前要手动重启）
 - [v3.1](releases/hotspotdata-v3.1.tar.gz)：没插 SIM 卡时也能深度休眠（没卡时射频状态是 CFUN 0，以前不认，一直当作射频开着）；系统装在 SD 卡上时暂不深度休眠（唤醒不了，会睡死）
 - [v3.0](releases/hotspotdata-v3.0.tar.gz)：USB 角色增加“关闭（不充电）”：数据和充电都关（充电芯片 HiZ，由电池供电）；配合 e5-sleep8 内核，插着线熄屏也能深度休眠
